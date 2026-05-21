@@ -16,6 +16,8 @@ import {
   marcarPerdida,
   cancelarProposta,
   gerarMagicLink,
+  enviarProposta,
+  enviarContratoParaAssinatura,
 } from './actions'
 
 interface Props {
@@ -64,7 +66,9 @@ export function PropostaAcoes({ id, status, papel }: Props) {
 
   const podeSubmeter = status === 'rascunho' || status === 'devolvida'
   const podeAprovar = isAdmin && status === 'aguardando_aprovacao'
+  const podeEnviar = status === 'aprovada'
   const podeFechar = ['enviada', 'aberta', 'em_negociacao'].includes(status)
+  const podeGerarContrato = status === 'fechada'
   const podePerder = !['fechada', 'contrato_gerado', 'rejeitada', 'perdida', 'cancelada'].includes(status)
   const podeCancelar = isAdmin && !['contrato_gerado', 'cancelada'].includes(status)
 
@@ -88,6 +92,16 @@ export function PropostaAcoes({ id, status, papel }: Props) {
               Rejeitar
             </Button>
           </>
+        )}
+        {podeEnviar && (
+          <Button onClick={() => executar(() => enviarProposta(id))} loading={loading}>
+            Enviar proposta ao cliente
+          </Button>
+        )}
+        {podeGerarContrato && (
+          <Button onClick={() => executar(() => enviarContratoParaAssinatura(id))} loading={loading}>
+            Gerar contrato e enviar p/ assinatura
+          </Button>
         )}
         {podeFechar && (
           <Button variant="secondary" onClick={() => abrir('fechada')}>
