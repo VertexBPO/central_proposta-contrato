@@ -73,6 +73,41 @@ export default async function PropostaDetailPage({ params }: { params: Promise<{
 
       <PropostaAcoes id={proposta.id} status={proposta.status} papel={papel} />
 
+      <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
+        <a
+          href={`/api/propostas/${proposta.id}/pdf`}
+          target="_blank"
+          rel="noreferrer"
+          style={{
+            padding: '8px 16px',
+            background: '#F0F4FB',
+            color: '#0D1B3E',
+            borderRadius: 8,
+            fontSize: 13,
+            fontWeight: 600,
+            textDecoration: 'none',
+          }}
+        >
+          📄 Visualizar PDF da Proposta
+        </a>
+        <a
+          href={`/api/propostas/${proposta.id}/contrato-pdf`}
+          target="_blank"
+          rel="noreferrer"
+          style={{
+            padding: '8px 16px',
+            background: '#F0F4FB',
+            color: '#0D1B3E',
+            borderRadius: 8,
+            fontSize: 13,
+            fontWeight: 600,
+            textDecoration: 'none',
+          }}
+        >
+          📄 Visualizar PDF do Contrato
+        </a>
+      </div>
+
       <section style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 24, marginTop: 24 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <Card>
