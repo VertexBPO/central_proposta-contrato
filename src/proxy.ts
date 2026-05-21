@@ -4,7 +4,7 @@ import { createServerClient } from '@supabase/ssr'
 const ROTAS_PUBLICAS = ['/login', '/esqueci-senha', '/redefinir-senha']
 const ROTAS_CLIENTE = ['/c']
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Rotas do cliente (magic link) — autenticação custom via token
