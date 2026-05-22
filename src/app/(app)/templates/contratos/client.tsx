@@ -30,6 +30,8 @@ export function TemplatesContratosClient({ templates }: Props) {
   const [ativo, setAtivo] = useState(true)
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
+  const [apagando, setApagando] = useState<string | null>(null)
+  const [erroApagar, setErroApagar] = useState<string | null>(null)
 
   function abrirNovo() {
     setEditing(null)
@@ -90,6 +92,30 @@ export function TemplatesContratosClient({ templates }: Props) {
     window.open(data.signedUrl, '_blank')
   }
 
+  async function apagarTemplate(t: ContractTemplate) {
+    setErroApagar(null)
+    const ok = window.confirm(
+      `Apagar o template "${t.nome}"?\n\nIsso é permanente. Se já houver propostas usando este contrato, o banco vai bloquear (use "Desativar" no checkbox em vez disso).`
+    )
+    if (!ok) return
+    setApagando(t.id)
+    const { error } = await supabase.from('contract_templates').delete().eq('id', t.id)
+    if (error) {
+      setApagando(null)
+      if (error.code === '23503') {
+        setErroApagar(`"${t.nome}" está vinculado a uma proposta. Desative em vez de apagar.`)
+      } else {
+        setErroApagar(error.message)
+      }
+      return
+    }
+    if (t.template_file_path) {
+      await supabase.storage.from('templates').remove([t.template_file_path])
+    }
+    setApagando(null)
+    startTransition(() => router.refresh())
+  }
+
   return (
     <>
       <PageHeader
@@ -122,10 +148,24 @@ export function TemplatesContratosClient({ templates }: Props) {
                     <Button variant="ghost" onClick={() => baixarTemplate(t)}>Baixar .docx</Button>
                   )}
                   <Button variant="secondary" onClick={() => abrirEdicao(t)}>Editar</Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => apagarTemplate(t)}
+                    loading={apagando === t.id}
+                    style={{ color: '#D64545' }}
+                  >
+                    Apagar
+                  </Button>
                 </div>
               </div>
             </Card>
           ))}
+        </div>
+      )}
+
+      {erroApagar && (
+        <div style={{ marginTop: 12, background: '#FCE8E8', color: '#D64545', padding: 12, borderRadius: 10, fontSize: 13 }}>
+          {erroApagar}
         </div>
       )}
 
@@ -149,6 +189,7 @@ export function TemplatesContratosClient({ templates }: Props) {
           <UploadDocx
             pastaStorage="contract-templates"
             arquivoAtual={fileName}
+            arquivoAtualPath={filePath}
             onArquivoSalvo={(path, nome) => {
               setFilePath(path)
               setFileName(nome)

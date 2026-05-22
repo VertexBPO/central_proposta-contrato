@@ -31,6 +31,8 @@ export function TemplatesEscoposClient({ escopos }: Props) {
   const [ativo, setAtivo] = useState(true)
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
+  const [apagando, setApagando] = useState<string | null>(null)
+  const [erroApagar, setErroApagar] = useState<string | null>(null)
 
   function abrirNovo() {
     setEditing(null)
@@ -94,6 +96,30 @@ export function TemplatesEscoposClient({ escopos }: Props) {
     window.open(data.signedUrl, '_blank')
   }
 
+  async function apagarTemplate(s: ScopeTemplate) {
+    setErroApagar(null)
+    const ok = window.confirm(
+      `Apagar o escopo "${s.nome}"?\n\nIsso é permanente. Se já houver propostas usando este escopo, o banco vai bloquear (use "Desativar" no checkbox em vez disso).`
+    )
+    if (!ok) return
+    setApagando(s.id)
+    const { error } = await supabase.from('scope_templates').delete().eq('id', s.id)
+    if (error) {
+      setApagando(null)
+      if (error.code === '23503') {
+        setErroApagar(`"${s.nome}" está vinculado a uma proposta. Desative em vez de apagar.`)
+      } else {
+        setErroApagar(error.message)
+      }
+      return
+    }
+    if (s.template_file_path) {
+      await supabase.storage.from('templates').remove([s.template_file_path])
+    }
+    setApagando(null)
+    startTransition(() => router.refresh())
+  }
+
   return (
     <>
       <PageHeader
@@ -125,10 +151,24 @@ export function TemplatesEscoposClient({ escopos }: Props) {
                     <Button variant="ghost" onClick={() => baixarTemplate(s)}>Baixar .docx</Button>
                   )}
                   <Button variant="secondary" onClick={() => abrirEdicao(s)}>Editar</Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => apagarTemplate(s)}
+                    loading={apagando === s.id}
+                    style={{ color: '#D64545' }}
+                  >
+                    Apagar
+                  </Button>
                 </div>
               </div>
             </Card>
           ))}
+        </div>
+      )}
+
+      {erroApagar && (
+        <div style={{ marginTop: 12, background: '#FCE8E8', color: '#D64545', padding: 12, borderRadius: 10, fontSize: 13 }}>
+          {erroApagar}
         </div>
       )}
 
@@ -152,6 +192,7 @@ export function TemplatesEscoposClient({ escopos }: Props) {
           <UploadDocx
             pastaStorage="scope-templates"
             arquivoAtual={fileName}
+            arquivoAtualPath={filePath}
             onArquivoSalvo={(path, nome) => {
               setFilePath(path)
               setFileName(nome)

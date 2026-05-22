@@ -1,14 +1,12 @@
 'use client'
 
 import { useState, FormEvent } from 'react'
-import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/Button'
 import { Input } from '@/components/Input'
 import { Card } from '@/components/Card'
 
 export default function LoginPage() {
-  const router = useRouter()
   const supabase = createClient()
   const [email, setEmail] = useState('')
   const [senha, setSenha] = useState('')
@@ -20,13 +18,13 @@ export default function LoginPage() {
     setErro(null)
     setLoading(true)
     const { error } = await supabase.auth.signInWithPassword({ email, password: senha })
-    setLoading(false)
     if (error) {
+      setLoading(false)
       setErro('E-mail ou senha incorretos.')
       return
     }
-    router.push('/dashboard')
-    router.refresh()
+    // Hard reload garante que cookies de auth propagaram pro middleware
+    window.location.href = '/dashboard'
   }
 
   return (

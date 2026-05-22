@@ -8,9 +8,10 @@ interface Props {
   onArquivoSalvo: (storagePath: string, nomeArquivo: string) => void
   pastaStorage: 'proposal-templates' | 'contract-templates' | 'scope-templates'
   arquivoAtual?: string | null
+  arquivoAtualPath?: string | null
 }
 
-export function UploadDocx({ onArquivoSalvo, pastaStorage, arquivoAtual }: Props) {
+export function UploadDocx({ onArquivoSalvo, pastaStorage, arquivoAtual, arquivoAtualPath }: Props) {
   const supabase = createClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [loading, setLoading] = useState(false)
@@ -21,7 +22,6 @@ export function UploadDocx({ onArquivoSalvo, pastaStorage, arquivoAtual }: Props
     setErro(null)
     setLoading(true)
     try {
-      // Caminho único: pasta + uuid-like + nome
       const ext = file.name.toLowerCase().endsWith('.docx') ? '.docx' : ''
       if (!ext) {
         setErro('Apenas arquivos .docx.')
@@ -40,6 +40,11 @@ export function UploadDocx({ onArquivoSalvo, pastaStorage, arquivoAtual }: Props
       if (upErr) {
         setErro(upErr.message)
         return
+      }
+
+      // Limpa arquivo antigo do Storage pra não deixar órfão
+      if (arquivoAtualPath && arquivoAtualPath !== path) {
+        await supabase.storage.from('templates').remove([arquivoAtualPath])
       }
 
       setNomeArquivo(file.name)
