@@ -1,5 +1,5 @@
 /**
- * Aplica alpha 30% em imagens marcadas como watermark dentro do .docx.
+ * Aplica alpha 15% em imagens marcadas como watermark dentro do .docx.
  *
  * LibreOffice (engine do CloudConvert) ignora vários atributos do Word
  * (gain/blacklevel, a:lum, a:alphaModFix), então a transparência precisa
@@ -107,7 +107,7 @@ export async function aplicarAlphaNasWatermarks(docxBuffer: Buffer): Promise<Buf
                   width: 1,
                   height: 1,
                   channels: 4,
-                  background: { r: 0, g: 0, b: 0, alpha: 0.3 },
+                  background: { r: 0, g: 0, b: 0, alpha: 0.15 },
                 },
               },
               tile: true,
