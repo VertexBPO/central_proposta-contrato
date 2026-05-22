@@ -14,47 +14,51 @@ function decodeEntities(s: string): string {
 }
 
 function escaparHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-}
-
-/**
- * Heurística: detecta hierarquia do título a partir do texto.
- * Retorna 1, 2 ou 3 (nivel) ou 0 (não é título).
- */
-function detectarTitulo(texto: string): number {
-  const t = texto.trim()
-  if (!t) return 0
-
-  // Padrões clássicos de contratos
-  if (/^(INSTRUMENTO|CONTRATO|TERMO|ANEXO|APÊNDICE)\b/i.test(t) && t.length < 120) return 1
-  if (/^CL[ÁA]USULA\s+[IVXLCDM]+/i.test(t)) return 2
-  if (/^CAP[ÍI]TULO\s+/i.test(t)) return 1
-  if (/^ART(IGO)?\.?\s*\d+/i.test(t)) return 2
-  if (/^SE[ÇC][ÃA]O\s+/i.test(t)) return 2
-  if (/^§\s*\d+/i.test(t)) return 0 // parágrafo, não título
-
-  // Numeração hierárquica: 1. / 1.1 / 1.1.1
-  const matchNum = t.match(/^(\d+)(\.\d+){0,3}\.?\s/)
-  if (matchNum && t.length < 140) {
-    const pontos = (matchNum[0].match(/\./g) || []).length
-    if (pontos <= 1) return 1 // 1. ou 1
-    if (pontos === 2) return 2 // 1.1
-    return 3 // 1.1.1
-  }
-
-  // Linhas curtas em ALL CAPS (sem ser frase) = título
-  const letras = t.replace(/[^A-Za-zÁÉÍÓÚÀÂÊÔÃÕÇáéíóúàâêôãõç]/g, '')
-  if (letras.length >= 4 && letras === letras.toUpperCase() && t.length < 100) return 2
-
-  return 0
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
 interface ProcessadoBloco {
   html: string
   texto: string
+}
+
+/**
+ * Lê numbering.xml e devolve um map numId -> ilvl -> 'bullet' | 'decimal' | ...
+ */
+function lerNumberingXml(xml: string): Map<string, Map<string, string>> {
+  const map = new Map<string, Map<string, string>>()
+  // Mapeia abstractNumId -> ilvl -> numFmt
+  const abstractMap = new Map<string, Map<string, string>>()
+  const abstractMatches = xml.match(/<w:abstractNum\b[^>]*w:abstractNumId="(\d+)"[\s\S]*?<\/w:abstractNum>/g) ?? []
+  for (const abs of abstractMatches) {
+    const idMatch = abs.match(/w:abstractNumId="(\d+)"/)
+    const abstractId = idMatch?.[1]
+    if (!abstractId) continue
+    const lvlMatches = abs.match(/<w:lvl\b[^>]*w:ilvl="(\d+)"[\s\S]*?<\/w:lvl>/g) ?? []
+    const lvlMap = new Map<string, string>()
+    for (const lvl of lvlMatches) {
+      const ilvlMatch = lvl.match(/w:ilvl="(\d+)"/)
+      const fmtMatch = lvl.match(/<w:numFmt[^>]*w:val="([^"]+)"/)
+      const ilvl = ilvlMatch?.[1]
+      const fmt = fmtMatch?.[1] ?? 'bullet'
+      if (ilvl) lvlMap.set(ilvl, fmt)
+    }
+    abstractMap.set(abstractId, lvlMap)
+  }
+
+  // numId -> abstractNumId
+  const numMatches = xml.match(/<w:num\b[^>]*w:numId="(\d+)"[\s\S]*?<\/w:num>/g) ?? []
+  for (const num of numMatches) {
+    const numIdMatch = num.match(/w:numId="(\d+)"/)
+    const absRefMatch = num.match(/<w:abstractNumId[^>]*w:val="(\d+)"/)
+    const numId = numIdMatch?.[1]
+    const absRef = absRefMatch?.[1]
+    if (numId && absRef) {
+      const lvlMap = abstractMap.get(absRef)
+      if (lvlMap) map.set(numId, lvlMap)
+    }
+  }
+  return map
 }
 
 async function docxToHtml(buffer: Buffer): Promise<ProcessadoBloco> {
@@ -63,12 +67,20 @@ async function docxToHtml(buffer: Buffer): Promise<ProcessadoBloco> {
   if (!documento) throw new Error('word/document.xml não encontrado')
 
   const xml = await documento.async('text')
+
+  // Numbering — opcional
+  let numberingMap: Map<string, Map<string, string>> = new Map()
+  const numberingFile = zip.file('word/numbering.xml')
+  if (numberingFile) {
+    const numXml = await numberingFile.async('text')
+    numberingMap = lerNumberingXml(numXml)
+  }
+
   const paragrafos = xml.match(/<w:p\b[^>]*>[\s\S]*?<\/w:p>/g) ?? []
 
   const blocosHtml: string[] = []
   const blocosTexto: string[] = []
   let listaAberta: 'ul' | 'ol' | null = null
-
   const fecharLista = () => {
     if (listaAberta) {
       blocosHtml.push(`</${listaAberta}>`)
@@ -79,8 +91,15 @@ async function docxToHtml(buffer: Buffer): Promise<ProcessadoBloco> {
   for (const pXml of paragrafos) {
     const styleMatch = pXml.match(/<w:pStyle[^>]*w:val="([^"]+)"/)
     const styleId = styleMatch?.[1]?.toLowerCase() ?? ''
-    const hasNumbering = /<w:numPr\b/.test(pXml)
 
+    // numPr
+    const numIdMatch = pXml.match(/<w:numPr\b[\s\S]*?<w:numId[^>]*w:val="(\d+)"/)
+    const ilvlMatch = pXml.match(/<w:numPr\b[\s\S]*?<w:ilvl[^>]*w:val="(\d+)"/)
+    const numId = numIdMatch?.[1]
+    const ilvl = ilvlMatch?.[1] ?? '0'
+    const hasNumbering = !!numId
+
+    // Extrai runs com formatação
     const runs = pXml.match(/<w:r\b[^>]*>[\s\S]*?<\/w:r>/g) ?? []
     let conteudoHtml = ''
     let conteudoTexto = ''
@@ -89,13 +108,7 @@ async function docxToHtml(buffer: Buffer): Promise<ProcessadoBloco> {
       const isBold = /<w:b[\/ >]/.test(rXml) || /<w:b\s/.test(rXml)
       const isItalic = /<w:i[\/ >]/.test(rXml) || /<w:i\s/.test(rXml)
       const isUnderline = /<w:u\b/.test(rXml)
-      const textosMatches = rXml.match(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g) ?? []
-      const texto = textosMatches
-        .map((t) => {
-          const m = t.match(/<w:t[^>]*>([\s\S]*?)<\/w:t>/)
-          return m?.[1] ?? ''
-        })
-        .join('')
+
       if (/<w:tab\b/.test(rXml)) {
         conteudoHtml += '    '
         conteudoTexto += '\t'
@@ -104,6 +117,14 @@ async function docxToHtml(buffer: Buffer): Promise<ProcessadoBloco> {
         conteudoHtml += '<br>'
         conteudoTexto += '\n'
       }
+
+      const textosMatches = rXml.match(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g) ?? []
+      const texto = textosMatches
+        .map((t) => {
+          const m = t.match(/<w:t[^>]*>([\s\S]*?)<\/w:t>/)
+          return m?.[1] ?? ''
+        })
+        .join('')
       let html = escaparHtml(decodeEntities(texto))
       if (isBold) html = `<strong>${html}</strong>`
       if (isItalic) html = `<em>${html}</em>`
@@ -116,8 +137,8 @@ async function docxToHtml(buffer: Buffer): Promise<ProcessadoBloco> {
     if (!textoLimpo && !conteudoHtml.trim()) continue
     blocosTexto.push(textoLimpo)
 
-    // 1) Heading explícito do Word
-    if (styleId.startsWith('heading') || styleId.startsWith('titulo') || styleId === 'title') {
+    // 1) Heading explícito do Word (Heading1 / Heading2 / Title)
+    if (styleId.startsWith('heading') || styleId === 'title') {
       fecharLista()
       const m = styleId.match(/(\d)/)
       const level = m ? Math.min(parseInt(m[1]), 3) : 1
@@ -125,24 +146,17 @@ async function docxToHtml(buffer: Buffer): Promise<ProcessadoBloco> {
       continue
     }
 
-    // 2) Lista do Word
-    if (hasNumbering) {
-      const isOrdered = /<w:numId[^>]*w:val="[2-9]/.test(pXml) || /numFmt[^>]*decimal/.test(pXml)
-      const tipo: 'ul' | 'ol' = isOrdered ? 'ol' : 'ul'
+    // 2) Lista — consulta o numbering.xml pra saber se é bullet ou numerada
+    if (hasNumbering && numId) {
+      const lvlMap = numberingMap.get(numId)
+      const numFmt = lvlMap?.get(ilvl) ?? 'bullet'
+      const tipo: 'ul' | 'ol' = numFmt === 'bullet' ? 'ul' : 'ol'
       if (listaAberta !== tipo) {
         fecharLista()
         blocosHtml.push(`<${tipo}>`)
         listaAberta = tipo
       }
       blocosHtml.push(`<li>${conteudoHtml}</li>`)
-      continue
-    }
-
-    // 3) Heurística por padrão de texto
-    const nivelHeuristica = detectarTitulo(textoLimpo)
-    if (nivelHeuristica > 0) {
-      fecharLista()
-      blocosHtml.push(`<h${nivelHeuristica}>${conteudoHtml}</h${nivelHeuristica}>`)
       continue
     }
 
