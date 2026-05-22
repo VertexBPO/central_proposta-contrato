@@ -170,7 +170,7 @@ export default async function PropostaDetailPage({ params }: { params: Promise<{
 
         <aside style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <Card>
-            <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Cliente</h3>
+            <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Contratante</h3>
             {cliente && (
               <>
                 <Link href={`/clientes/${cliente.id}`} style={{ fontSize: 14, fontWeight: 600 }}>

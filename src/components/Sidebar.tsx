@@ -13,10 +13,10 @@ interface ItemMenu {
 const ITENS: ItemMenu[] = [
   { href: '/dashboard', label: 'Dashboard' },
   { href: '/propostas/nova', label: 'Nova proposta' },
-  { href: '/clientes', label: 'Clientes' },
+  { href: '/clientes', label: 'Contratantes' },
   { href: '/aprovacoes', label: 'Aprovações', adminOnly: true },
   { href: '/templates/propostas', label: 'Templates', adminOnly: true },
-  { href: '/contratantes', label: 'Contratantes', adminOnly: true },
+  { href: '/contratantes', label: 'Contratada', adminOnly: true },
   { href: '/usuarios', label: 'Usuários', adminOnly: true },
   { href: '/parametros', label: 'Parâmetros', adminOnly: true },
   { href: '/auditoria', label: 'Auditoria', adminOnly: true },

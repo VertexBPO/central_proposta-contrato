@@ -28,16 +28,35 @@ function inputMoneyFormat(n: number): string {
   return n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
+function formatCep(s: string): string {
+  const d = s.replace(/\D/g, '').slice(0, 8)
+  if (d.length <= 5) return d
+  return `${d.slice(0, 5)}-${d.slice(5)}`
+}
+
+const UFS = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO']
+
 export function NovaPropostaForm({ templates, escopos, contratantes, clientePre }: Props) {
   const router = useRouter()
 
-  // Cliente
+  // Contratante (cliente)
   const [clientId] = useState<string | null>(clientePre?.id ?? null)
   const [cnpj, setCnpj] = useState(clientePre?.cnpj ? formatCnpj(clientePre.cnpj) : '')
   const [razaoSocial, setRazaoSocial] = useState(clientePre?.razao_social ?? '')
   const [emailCliente, setEmailCliente] = useState(clientePre?.email ?? '')
+  const [logradouro, setLogradouro] = useState(clientePre?.endereco_logradouro ?? '')
+  const [numero, setNumero] = useState(clientePre?.endereco_numero ?? '')
+  const [complemento, setComplemento] = useState(clientePre?.endereco_complemento ?? '')
+  const [bairro, setBairro] = useState(clientePre?.endereco_bairro ?? '')
+  const [cidade, setCidade] = useState(clientePre?.endereco_cidade ?? '')
+  const [uf, setUf] = useState(clientePre?.endereco_uf ?? '')
+  const [cep, setCep] = useState(clientePre?.endereco_cep ?? '')
 
-  // Contratante
+  // CNPJ lookup
+  const [buscandoCnpj, setBuscandoCnpj] = useState(false)
+  const [avisoCnpj, setAvisoCnpj] = useState<string | null>(null)
+
+  // Contratada (Vertex)
   const [contractorId, setContractorId] = useState(contratantes[0]?.id ?? '')
 
   // Proposta
@@ -67,6 +86,39 @@ export function NovaPropostaForm({ templates, escopos, contratantes, clientePre 
 
   const valorTotal = Number(valorAdesao) + Number(valorParcela) * Number(parcelas)
 
+  async function buscarCnpjNaReceita() {
+    setAvisoCnpj(null)
+    const digits = onlyDigits(cnpj)
+    if (digits.length !== 14) {
+      setAvisoCnpj('CNPJ precisa ter 14 dígitos.')
+      return
+    }
+    setBuscandoCnpj(true)
+    try {
+      const resp = await fetch(`/api/cnpj/${digits}`, { cache: 'no-store' })
+      const data = await resp.json()
+      if (!resp.ok || data.erro) {
+        setAvisoCnpj(data.erro || 'Falha ao buscar CNPJ.')
+        return
+      }
+      setRazaoSocial(data.razao_social ?? '')
+      setLogradouro(data.endereco_logradouro ?? '')
+      setNumero(data.endereco_numero ?? '')
+      setComplemento(data.endereco_complemento ?? '')
+      setBairro(data.endereco_bairro ?? '')
+      setCidade(data.endereco_cidade ?? '')
+      setUf(data.endereco_uf ?? '')
+      const cepRaw = (data.endereco_cep ?? '').replace(/\D/g, '')
+      setCep(cepRaw.length === 8 ? `${cepRaw.slice(0, 5)}-${cepRaw.slice(5)}` : cepRaw)
+      if (data.email_receita && !emailCliente) setEmailCliente(data.email_receita)
+      setAvisoCnpj('✓ Dados carregados da Receita.')
+    } catch (e) {
+      setAvisoCnpj(e instanceof Error ? e.message : 'Erro de rede.')
+    } finally {
+      setBuscandoCnpj(false)
+    }
+  }
+
   function aoTrocarTemplate(id: string) {
     setTemplateId(id)
   }
@@ -92,7 +144,7 @@ export function NovaPropostaForm({ templates, escopos, contratantes, clientePre 
   async function submeter() {
     setErro(null)
     if (!clientId && (!cnpj || !razaoSocial || !emailCliente)) {
-      setErro('Preencha os dados do cliente.')
+      setErro('Preencha os dados do contratante.')
       return
     }
     if (!templateId || !escopo.trim()) {
@@ -100,7 +152,7 @@ export function NovaPropostaForm({ templates, escopos, contratantes, clientePre 
       return
     }
     if (!contractorId) {
-      setErro('Escolha o contratante (cadastre em "Contratantes" se a lista estiver vazia).')
+      setErro('Escolha a contratada (cadastre em "Contratada" se a lista estiver vazia).')
       return
     }
     if (prazo <= 0 || parcelas <= 0 || valorParcela <= 0) {
@@ -118,6 +170,13 @@ export function NovaPropostaForm({ templates, escopos, contratantes, clientePre 
       cnpj: cnpj ? onlyDigits(cnpj) : undefined,
       razao_social: razaoSocial,
       email_cliente: emailCliente,
+      endereco_logradouro: logradouro || undefined,
+      endereco_numero: numero || undefined,
+      endereco_complemento: complemento || undefined,
+      endereco_bairro: bairro || undefined,
+      endereco_cidade: cidade || undefined,
+      endereco_uf: uf || undefined,
+      endereco_cep: cep || undefined,
       contractor_id: contractorId,
       proposal_template_id: templateId,
       scope_template_id: scopeId || null,
@@ -154,7 +213,7 @@ export function NovaPropostaForm({ templates, escopos, contratantes, clientePre 
             Proposta criada e link gerado!
           </h3>
           <p style={{ fontSize: 13, marginBottom: 8 }}>
-            Compartilhe este link com o cliente para que ele preencha os dados (válido por 24h):
+            Compartilhe este link com o contratante para que ele preencha os dados (válido por 24h):
           </p>
           <code
             style={{
@@ -176,7 +235,7 @@ export function NovaPropostaForm({ templates, escopos, contratantes, clientePre 
       )}
 
       <section style={{ marginBottom: 24 }}>
-        <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12, color: '#0D1B3E' }}>1. Cliente</h2>
+        <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12, color: '#0D1B3E' }}>1. Contratante</h2>
         <Card>
           {clientePre ? (
             <div style={{ background: '#F0F4FB', padding: 12, borderRadius: 10, marginBottom: 12 }}>
@@ -185,32 +244,105 @@ export function NovaPropostaForm({ templates, escopos, contratantes, clientePre 
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <Input
-                label="CNPJ"
-                value={cnpj}
-                onChange={(e) => setCnpj(formatCnpj(e.target.value))}
-                placeholder="00.000.000/0000-00"
-                inputMode="numeric"
-              />
+              <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                <div style={{ flex: 1 }}>
+                  <Input
+                    label="CNPJ"
+                    value={cnpj}
+                    onChange={(e) => setCnpj(formatCnpj(e.target.value))}
+                    placeholder="00.000.000/0000-00"
+                    inputMode="numeric"
+                  />
+                </div>
+                <Button type="button" variant="secondary" onClick={buscarCnpjNaReceita} loading={buscandoCnpj}>
+                  Buscar na Receita
+                </Button>
+              </div>
+              {avisoCnpj && (
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: avisoCnpj.startsWith('✓') ? '#1B9E5C' : '#D64545',
+                    background: avisoCnpj.startsWith('✓') ? '#E6F5EC' : '#FCE8E8',
+                    padding: 8,
+                    borderRadius: 8,
+                  }}
+                >
+                  {avisoCnpj}
+                </div>
+              )}
               <Input
                 label="Razão social"
                 value={razaoSocial}
                 onChange={(e) => setRazaoSocial(e.target.value)}
               />
               <Input
-                label="E-mail do cliente"
+                label="E-mail do contratante"
                 type="email"
                 value={emailCliente}
                 onChange={(e) => setEmailCliente(e.target.value)}
-                placeholder="contato@cliente.com.br"
+                placeholder="contato@contratante.com.br"
               />
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+
+              <h3 style={{ fontSize: 13, fontWeight: 600, color: '#0D1B3E', marginTop: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Endereço
+              </h3>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <Input
+                  label="CEP"
+                  value={cep}
+                  onChange={(e) => setCep(formatCep(e.target.value))}
+                  placeholder="00000-000"
+                  inputMode="numeric"
+                />
+                <div />
+                <div style={{ gridColumn: '1 / span 2' }}>
+                  <Input
+                    label="Logradouro"
+                    value={logradouro}
+                    onChange={(e) => setLogradouro(e.target.value)}
+                    placeholder="Rua / Av."
+                  />
+                </div>
+                <Input
+                  label="Número"
+                  value={numero}
+                  onChange={(e) => setNumero(e.target.value)}
+                />
+                <Input
+                  label="Complemento"
+                  value={complemento}
+                  onChange={(e) => setComplemento(e.target.value)}
+                />
+                <Input
+                  label="Bairro"
+                  value={bairro}
+                  onChange={(e) => setBairro(e.target.value)}
+                />
+                <Input
+                  label="Cidade"
+                  value={cidade}
+                  onChange={(e) => setCidade(e.target.value)}
+                />
+                <Select
+                  label="UF"
+                  value={uf}
+                  onChange={(e) => setUf(e.target.value.toUpperCase())}
+                >
+                  <option value="">—</option>
+                  {UFS.map((u) => (
+                    <option key={u} value={u}>{u}</option>
+                  ))}
+                </Select>
+              </div>
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, marginTop: 8 }}>
                 <input
                   type="checkbox"
                   checked={enviarMagicLink}
                   onChange={(e) => setEnviarMagicLink(e.target.checked)}
                 />
-                Gerar link para o cliente completar os próprios dados (24h)
+                Gerar link para o contratante completar os próprios dados (24h)
               </label>
             </div>
           )}
@@ -221,8 +353,8 @@ export function NovaPropostaForm({ templates, escopos, contratantes, clientePre 
         <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12, color: '#0D1B3E' }}>2. Proposta</h2>
         <Card>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <Select label="Contratante (aparece como CONTRATADA)" value={contractorId} onChange={(e) => setContractorId(e.target.value)}>
-              {contratantes.length === 0 && <option value="">— cadastre um contratante primeiro —</option>}
+            <Select label="Contratada" value={contractorId} onChange={(e) => setContractorId(e.target.value)}>
+              {contratantes.length === 0 && <option value="">— cadastre a contratada primeiro —</option>}
               {contratantes.map((c) => (
                 <option key={c.id} value={c.id}>{c.razao_social}</option>
               ))}

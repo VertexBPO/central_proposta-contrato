@@ -9,12 +9,20 @@ import { onlyDigits, validateCnpj } from '@/lib/db/cnpj'
 import { EscopoTipo } from '@/lib/db/types'
 
 interface NovaPropostaInput {
-  // cliente
+  // contratante (cliente)
   client_id?: string // se já existe
   cnpj?: string
   razao_social?: string
   email_cliente?: string
-  // contratante (CONTRATADA)
+  // endereço do contratante
+  endereco_logradouro?: string
+  endereco_numero?: string
+  endereco_complemento?: string
+  endereco_bairro?: string
+  endereco_cidade?: string
+  endereco_uf?: string
+  endereco_cep?: string
+  // contratada (Vertex)
   contractor_id: string
   // proposta
   proposal_template_id: string
@@ -49,7 +57,7 @@ export async function criarProposta(input: NovaPropostaInput): Promise<Resultado
   let clientId = input.client_id
   if (!clientId) {
     if (!input.cnpj || !input.razao_social || !input.email_cliente) {
-      return { ok: false, erro: 'Informe CNPJ, razão social e e-mail do cliente.' }
+      return { ok: false, erro: 'Informe CNPJ, razão social e e-mail do contratante.' }
     }
     const cnpj = onlyDigits(input.cnpj)
     if (!validateCnpj(cnpj)) return { ok: false, erro: 'CNPJ inválido.' }
@@ -64,6 +72,18 @@ export async function criarProposta(input: NovaPropostaInput): Promise<Resultado
 
     if (existente) {
       clientId = existente.id
+      // Atualiza endereço se vier preenchido (lookup BrasilAPI ou edição manual)
+      const endUpdate: Record<string, string | null> = {}
+      if (input.endereco_logradouro) endUpdate.endereco_logradouro = input.endereco_logradouro.trim()
+      if (input.endereco_numero) endUpdate.endereco_numero = input.endereco_numero.trim()
+      if (input.endereco_complemento) endUpdate.endereco_complemento = input.endereco_complemento.trim()
+      if (input.endereco_bairro) endUpdate.endereco_bairro = input.endereco_bairro.trim()
+      if (input.endereco_cidade) endUpdate.endereco_cidade = input.endereco_cidade.trim()
+      if (input.endereco_uf) endUpdate.endereco_uf = input.endereco_uf.trim().toUpperCase()
+      if (input.endereco_cep) endUpdate.endereco_cep = input.endereco_cep.trim()
+      if (Object.keys(endUpdate).length > 0) {
+        await admin.from('clients').update(endUpdate).eq('id', clientId)
+      }
     } else {
       const { data: novoCli, error: e1 } = await admin
         .from('clients')
@@ -71,10 +91,17 @@ export async function criarProposta(input: NovaPropostaInput): Promise<Resultado
           cnpj,
           razao_social: input.razao_social.trim(),
           email: input.email_cliente.trim(),
+          endereco_logradouro: input.endereco_logradouro?.trim() || null,
+          endereco_numero: input.endereco_numero?.trim() || null,
+          endereco_complemento: input.endereco_complemento?.trim() || null,
+          endereco_bairro: input.endereco_bairro?.trim() || null,
+          endereco_cidade: input.endereco_cidade?.trim() || null,
+          endereco_uf: input.endereco_uf?.trim().toUpperCase() || null,
+          endereco_cep: input.endereco_cep?.trim() || null,
         })
         .select('id')
         .single()
-      if (e1 || !novoCli) return { ok: false, erro: `Erro ao criar cliente: ${e1?.message}` }
+      if (e1 || !novoCli) return { ok: false, erro: `Erro ao criar contratante: ${e1?.message}` }
       clientId = novoCli.id
     }
   }
@@ -101,7 +128,7 @@ export async function criarProposta(input: NovaPropostaInput): Promise<Resultado
     magic_link_expira_em = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
   }
 
-  if (!input.contractor_id) return { ok: false, erro: 'Selecione um contratante.' }
+  if (!input.contractor_id) return { ok: false, erro: 'Selecione a contratada.' }
 
   // 5) Criar proposta
   const { data: proposta, error: e3 } = await admin

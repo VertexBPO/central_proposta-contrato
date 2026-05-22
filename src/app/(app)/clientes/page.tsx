@@ -31,7 +31,7 @@ export default async function ClientesPage({ searchParams }: { searchParams: Pro
 
   return (
     <div style={{ maxWidth: 1280, margin: '0 auto' }}>
-      <PageHeader title="Clientes" subtitle={`${clientes.length} empresa(s) cadastrada(s)`} />
+      <PageHeader title="Contratantes" subtitle={`${clientes.length} empresa(s) cadastrada(s)`} />
 
       <form style={{ marginBottom: 16 }}>
         <input
@@ -54,7 +54,7 @@ export default async function ClientesPage({ searchParams }: { searchParams: Pro
       {clientes.length === 0 ? (
         <Card>
           <p style={{ color: '#8A9AB5' }}>
-            {q ? 'Nenhum cliente encontrado para essa busca.' : 'Nenhum cliente cadastrado ainda. Crie uma nova proposta — o cliente preenche os próprios dados.'}
+            {q ? 'Nenhum contratante encontrado para essa busca.' : 'Nenhum contratante cadastrado ainda. Crie uma nova proposta — o contratante preenche os próprios dados.'}
           </p>
         </Card>
       ) : (

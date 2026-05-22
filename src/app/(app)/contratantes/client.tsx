@@ -101,14 +101,14 @@ export function ContratantesClient({ contratantes }: Props) {
   return (
     <div style={{ maxWidth: 960, margin: '0 auto' }}>
       <PageHeader
-        title="Contratantes"
-        subtitle="Empresas (PJ) ou pessoas (PF) que aparecem como CONTRATADA"
-        actions={<Button onClick={abrirNovo}>+ Novo contratante</Button>}
+        title="Contratada"
+        subtitle="Empresa(s) Vertex (PJ ou PF) que aparecem como CONTRATADA nas propostas"
+        actions={<Button onClick={abrirNovo}>+ Nova contratada</Button>}
       />
 
       {contratantes.length === 0 ? (
         <Card>
-          <p style={{ color: '#8A9AB5' }}>Nenhum contratante cadastrado ainda.</p>
+          <p style={{ color: '#8A9AB5' }}>Nenhuma contratada cadastrada ainda.</p>
         </Card>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
