@@ -1,10 +1,13 @@
-import { PDFDocument, StandardFonts, rgb, type PDFPage, type PDFFont } from 'pdf-lib'
+import { PDFDocument, rgb, type PDFPage, type PDFFont } from 'pdf-lib'
+import fontkit from '@pdf-lib/fontkit'
+import { readFile } from 'node:fs/promises'
+import path from 'node:path'
 import { renderizarHtmlNoPdf, type RenderState } from './render-html-pdf'
 
 interface BuildOptions {
   titulo: string
   numero: string
-  conteudo: string // HTML ou texto plano (com placeholders já substituídos)
+  conteudo: string
   cliente: {
     razao_social: string
     cnpj: string
@@ -20,11 +23,29 @@ interface BuildOptions {
 
 const COR_PRIMARIA = rgb(13 / 255, 27 / 255, 62 / 255)
 const COR_SECUNDARIA = rgb(138 / 255, 154 / 255, 181 / 255)
-const COR_TEXTO = rgb(13 / 255, 27 / 255, 62 / 255)
+const COR_TEXTO = rgb(0, 0, 0)
 
 const PAGE_W = 595.28
 const PAGE_H = 841.89
 const MARGIN = 50
+
+const FONT_DIR = path.join(process.cwd(), 'public', 'fonts')
+
+async function carregarFontes(doc: PDFDocument) {
+  doc.registerFontkit(fontkit)
+  const [light, lightItalic, bold, boldItalic] = await Promise.all([
+    readFile(path.join(FONT_DIR, 'Calibri-Light.ttf')),
+    readFile(path.join(FONT_DIR, 'Calibri-Italic.ttf')),
+    readFile(path.join(FONT_DIR, 'Calibri-Bold.ttf')),
+    readFile(path.join(FONT_DIR, 'Calibri-BoldItalic.ttf')),
+  ])
+  return {
+    light: await doc.embedFont(light, { subset: true }),
+    lightItalic: await doc.embedFont(lightItalic, { subset: true }),
+    bold: await doc.embedFont(bold, { subset: true }),
+    boldItalic: await doc.embedFont(boldItalic, { subset: true }),
+  }
+}
 
 function pintarHeader(page: PDFPage, font: PDFFont, bold: PDFFont, numero: string) {
   page.drawRectangle({ x: 0, y: PAGE_H - 80, width: PAGE_W, height: 80, color: COR_PRIMARIA })
@@ -50,7 +71,7 @@ function escreverLinha(
   texto: string,
   opts: { size?: number; bold?: boolean; cor?: ReturnType<typeof rgb>; gap?: number } = {}
 ) {
-  const { size = 10, bold = false, cor = COR_TEXTO, gap = 4 } = opts
+  const { size = 10.5, bold = false, cor = COR_TEXTO, gap = 4 } = opts
   const f = bold ? state.bold : state.font
   if (state.cursorY - size * 1.4 < state.marginBottom) {
     state.page = state.doc.addPage([PAGE_W, PAGE_H])
@@ -68,21 +89,19 @@ function escreverLinha(
 
 export async function gerarPdf(opts: BuildOptions): Promise<Uint8Array> {
   const doc = await PDFDocument.create()
-  const font = await doc.embedFont(StandardFonts.Helvetica)
-  const bold = await doc.embedFont(StandardFonts.HelveticaBold)
-  const italic = await doc.embedFont(StandardFonts.HelveticaOblique)
-  const boldItalic = await doc.embedFont(StandardFonts.HelveticaBoldOblique)
+  const fonts = await carregarFontes(doc)
+  const { light, lightItalic, bold, boldItalic } = fonts
 
   const firstPage = doc.addPage([PAGE_W, PAGE_H])
-  pintarHeader(firstPage, font, bold, opts.numero)
+  pintarHeader(firstPage, light, bold, opts.numero)
 
   const state: RenderState = {
     doc,
     page: firstPage,
     cursorY: PAGE_H - 110,
-    font,
+    font: light,
     bold,
-    italic,
+    italic: lightItalic,
     boldItalic,
     pageWidth: PAGE_W,
     pageHeight: PAGE_H,
@@ -90,8 +109,10 @@ export async function gerarPdf(opts: BuildOptions): Promise<Uint8Array> {
     marginBottom: MARGIN,
   }
 
+  // Título principal — 18, bold, centralizado seria ideal, mas mantemos left por simplicidade
   escreverLinha(state, opts.titulo, { size: 18, bold: true, gap: 16 })
 
+  // Partes
   escreverLinha(state, 'CONTRATADA', { size: 9, bold: true, cor: COR_SECUNDARIA, gap: 2 })
   escreverLinha(state, opts.contratante.razao_social, { size: 11, bold: true })
   escreverLinha(state, `CNPJ ${opts.contratante.cnpj}`, { size: 10, gap: 12 })
@@ -105,14 +126,12 @@ export async function gerarPdf(opts: BuildOptions): Promise<Uint8Array> {
   if (opts.resumoComercial?.length) {
     escreverLinha(state, 'RESUMO COMERCIAL', { size: 9, bold: true, cor: COR_SECUNDARIA, gap: 4 })
     for (const item of opts.resumoComercial) {
-      escreverLinha(state, `${item.label}: ${item.valor}`, { size: 10, gap: 2 })
+      escreverLinha(state, `${item.label}: ${item.valor}`, { size: 10.5, gap: 2 })
     }
     state.cursorY -= 12
   }
 
-  escreverLinha(state, 'ESCOPO E CONDIÇÕES', { size: 9, bold: true, cor: COR_SECUNDARIA, gap: 6 })
-
-  // Conteúdo principal (HTML formatado ou texto)
+  // Conteúdo formatado
   renderizarHtmlNoPdf(state, opts.conteudo)
 
   // Assinatura
@@ -133,7 +152,7 @@ export async function gerarPdf(opts: BuildOptions): Promise<Uint8Array> {
       x: PAGE_W - MARGIN - 90,
       y: MARGIN / 2,
       size: 8,
-      font,
+      font: light,
       color: COR_SECUNDARIA,
     })
   })

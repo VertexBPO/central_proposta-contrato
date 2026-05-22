@@ -13,6 +13,7 @@ import { Badge } from '@/components/Badge'
 import { PageHeader } from '@/components/PageHeader'
 import { UploadDocx } from '@/components/UploadDocx'
 import { RichEditor } from '@/components/RichEditor'
+import { PreviewHtml } from '@/components/PreviewHtml'
 
 interface Props {
   templates: ProposalTemplate[]
@@ -25,6 +26,7 @@ export function TemplatesPropostasClient({ templates, contratos }: Props) {
   const [, startTransition] = useTransition()
 
   const [open, setOpen] = useState(false)
+  const [previewing, setPreviewing] = useState<ProposalTemplate | null>(null)
   const [editing, setEditing] = useState<ProposalTemplate | null>(null)
   const [nome, setNome] = useState('')
   const [slug, setSlug] = useState('')
@@ -118,14 +120,22 @@ export function TemplatesPropostasClient({ templates, contratos }: Props) {
                     Contrato vinculado: <strong style={{ color: '#0D1B3E' }}>{t.contract_template_id ? (contratoMap.get(t.contract_template_id) ?? '—') : '—'}</strong>
                   </div>
                 </div>
-                <Button variant="secondary" onClick={() => abrirEdicao(t)}>
-                  Editar
-                </Button>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <Button variant="ghost" onClick={() => setPreviewing(t)}>Visualizar</Button>
+                  <Button variant="secondary" onClick={() => abrirEdicao(t)}>Editar</Button>
+                </div>
               </div>
             </Card>
           ))}
         </div>
       )}
+
+      <PreviewHtml
+        open={previewing !== null}
+        onClose={() => setPreviewing(null)}
+        titulo={previewing?.nome ?? ''}
+        html={previewing?.escopo_padrao ?? ''}
+      />
 
       <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Editar proposta' : 'Nova proposta'} maxWidth={760}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>

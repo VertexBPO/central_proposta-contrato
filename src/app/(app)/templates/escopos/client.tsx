@@ -12,6 +12,7 @@ import { Badge } from '@/components/Badge'
 import { PageHeader } from '@/components/PageHeader'
 import { UploadDocx } from '@/components/UploadDocx'
 import { RichEditor } from '@/components/RichEditor'
+import { PreviewHtml } from '@/components/PreviewHtml'
 
 interface Props {
   escopos: ScopeTemplate[]
@@ -23,6 +24,7 @@ export function TemplatesEscoposClient({ escopos }: Props) {
   const [, startTransition] = useTransition()
 
   const [open, setOpen] = useState(false)
+  const [previewing, setPreviewing] = useState<ScopeTemplate | null>(null)
   const [editing, setEditing] = useState<ScopeTemplate | null>(null)
   const [nome, setNome] = useState('')
   const [slug, setSlug] = useState('')
@@ -105,12 +107,22 @@ export function TemplatesEscoposClient({ escopos }: Props) {
                   <div style={{ fontSize: 12, color: '#8A9AB5', fontFamily: 'monospace', marginBottom: 6 }}>{s.slug}</div>
                   {s.descricao && <p style={{ fontSize: 13, color: '#0D1B3E' }}>{s.descricao}</p>}
                 </div>
-                <Button variant="secondary" onClick={() => abrirEdicao(s)}>Editar</Button>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <Button variant="ghost" onClick={() => setPreviewing(s)}>Visualizar</Button>
+                  <Button variant="secondary" onClick={() => abrirEdicao(s)}>Editar</Button>
+                </div>
               </div>
             </Card>
           ))}
         </div>
       )}
+
+      <PreviewHtml
+        open={previewing !== null}
+        onClose={() => setPreviewing(null)}
+        titulo={previewing?.nome ?? ''}
+        html={previewing?.corpo ?? ''}
+      />
 
       <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Editar escopo' : 'Novo escopo'} maxWidth={760}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>

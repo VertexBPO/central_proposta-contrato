@@ -19,7 +19,7 @@ interface RenderState {
   marginBottom: number
 }
 
-const COR_TEXTO = rgb(13 / 255, 27 / 255, 62 / 255)
+const COR_TEXTO = rgb(0, 0, 0)
 
 function novaPagina(state: RenderState) {
   state.page = state.doc.addPage([state.pageWidth, state.pageHeight])
@@ -180,21 +180,24 @@ export function renderizarHtmlNoPdf(state: RenderState, html: string) {
     const tag = el.tagName?.toLowerCase()
     const segs = colecionarRuns(el)
 
+    // Força títulos como bold
+    const segsBold = (s: RunSegment[]) => s.map((x) => ({ ...x, bold: true }))
+
     switch (tag) {
       case 'h1':
-        state.cursorY -= 8
-        renderizarParagrafo(state, segs, 16, 22, 8)
+        state.cursorY -= 14 // espaçamento duplo antes
+        renderizarParagrafo(state, segsBold(segs), 14, 20, 10, 0)
         break
       case 'h2':
-        state.cursorY -= 6
-        renderizarParagrafo(state, segs, 13, 18, 6)
+        state.cursorY -= 12 // espaçamento duplo antes
+        renderizarParagrafo(state, segsBold(segs), 14, 20, 8, 12)
         break
       case 'h3':
-        state.cursorY -= 4
-        renderizarParagrafo(state, segs, 11, 16, 4)
+        state.cursorY -= 6
+        renderizarParagrafo(state, segsBold(segs), 12, 17, 6, 24)
         break
       case 'p':
-        renderizarParagrafo(state, segs, 10, 14, 4)
+        renderizarParagrafo(state, segs, 10.5, 15, 5)
         break
       case 'ul':
         listaTipo = 'ul'
@@ -216,15 +219,15 @@ export function renderizarHtmlNoPdf(state: RenderState, html: string) {
         renderizarParagrafo(
           state,
           [{ texto: marcador, bold: false, italic: false }, ...segs],
-          10,
-          14,
-          2,
-          16
+          10.5,
+          15,
+          3,
+          24
         )
         break
       }
       case 'blockquote':
-        renderizarParagrafo(state, segs.map((s) => ({ ...s, italic: true })), 10, 14, 4, 18)
+        renderizarParagrafo(state, segs.map((s) => ({ ...s, italic: true })), 10.5, 15, 5, 24)
         break
       case 'br':
         state.cursorY -= 6
