@@ -97,7 +97,11 @@ export function AcoesRapidas({ id, numero, status, isAdmin }: Props) {
         href={`/api/propostas/${id}/pdf`}
         target="_blank"
         rel="noreferrer"
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          window.open(`/api/propostas/${id}/pdf?t=${Date.now()}`, '_blank', 'noreferrer')
+        }}
         style={{
           padding: '6px 10px',
           background: '#F0F4FB',

@@ -97,6 +97,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     headers: {
       'Content-Type': 'application/pdf',
       'Content-Disposition': `inline; filename="contrato-${proposta.numero}.pdf"`,
+      'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+      'Pragma': 'no-cache',
+      'Expires': '0',
     },
   })
 }
