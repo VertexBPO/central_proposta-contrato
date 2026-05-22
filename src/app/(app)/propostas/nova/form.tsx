@@ -136,18 +136,12 @@ export function NovaPropostaForm({ templates, escopos, contratantes, clientePre 
 
   function aoTrocarEscopo(id: string) {
     setScopeId(id)
-    const s = escopos.find((x) => x.id === id)
-    if (s && escopoTipo === 'padrao') {
-      setEscopo(s.corpo)
-    }
+    // No tipo "padrão" o sistema usa o .docx direto, não precisa preencher texto
   }
 
   function aoTrocarTipo(tipo: EscopoTipo) {
     setEscopoTipo(tipo)
-    if (tipo === 'padrao' && scopeId) {
-      const s = escopos.find((x) => x.id === scopeId)
-      if (s) setEscopo(s.corpo)
-    } else if (tipo === 'personalizado') {
+    if (tipo === 'personalizado') {
       setEscopo('')
     }
   }
@@ -158,8 +152,16 @@ export function NovaPropostaForm({ templates, escopos, contratantes, clientePre 
       setErro('Preencha os dados do contratante.')
       return
     }
-    if (!templateId || !escopo.trim()) {
-      setErro('Escolha o template e preencha o escopo.')
+    if (!templateId) {
+      setErro('Escolha o template.')
+      return
+    }
+    if (escopoTipo === 'padrao' && !scopeId) {
+      setErro('Escolha um escopo padrão (ou troque para "Personalizado").')
+      return
+    }
+    if (escopoTipo === 'personalizado' && !escopo.trim()) {
+      setErro('Preencha o escopo personalizado.')
       return
     }
     if (!contractorId) {
@@ -387,7 +389,7 @@ export function NovaPropostaForm({ templates, escopos, contratantes, clientePre 
                 Tipo de escopo
               </span>
               <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
-                {(['padrao', 'editado', 'personalizado'] as EscopoTipo[]).map((t) => (
+                {(['padrao', 'personalizado'] as EscopoTipo[]).map((t) => (
                   <label key={t} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14 }}>
                     <input
                       type="radio"
@@ -395,20 +397,26 @@ export function NovaPropostaForm({ templates, escopos, contratantes, clientePre 
                       checked={escopoTipo === t}
                       onChange={() => aoTrocarTipo(t)}
                     />
-                    {t === 'padrao' ? 'Padrão' : t === 'editado' ? 'Padrão editado' : 'Personalizado'}
+                    {t === 'padrao' ? 'Padrão (usa .docx cadastrado)' : 'Personalizado (texto livre)'}
                   </label>
                 ))}
               </div>
             </div>
 
-            <Textarea
-              label="Escopo final"
-              value={escopo}
-              onChange={(e) => setEscopo(e.target.value)}
-              rows={12}
-              style={{ minHeight: 200, fontFamily: 'monospace', fontSize: 13 }}
-              disabled={escopoTipo === 'padrao'}
-            />
+            {escopoTipo === 'padrao' ? (
+              <div style={{ background: '#F0F4FB', padding: 12, borderRadius: 10, fontSize: 13, color: '#0D1B3E' }}>
+                ℹ️ Sistema vai usar o conteúdo do escopo cadastrado (com formatação rica) ao gerar o PDF.
+              </div>
+            ) : (
+              <Textarea
+                label="Escopo personalizado"
+                value={escopo}
+                onChange={(e) => setEscopo(e.target.value)}
+                rows={12}
+                style={{ minHeight: 200, fontSize: 13 }}
+                placeholder="Digite o escopo completo da proposta (texto plano)…"
+              />
+            )}
           </div>
         </Card>
       </section>

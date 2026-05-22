@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { Client, Contractor, Proposal, ProposalTemplate, ScopeTemplate } from '@/lib/db/types'
-import { preencherDocx } from '@/lib/docs/gerar-com-template'
+import { preencherDocx, extrairXmlCorpoEscopo, textoParaXmlParagrafos } from '@/lib/docs/gerar-com-template'
 import { docxParaPdf } from '@/lib/cloudconvert/client'
 import { montarValores } from '@/lib/docs/valores-placeholders'
 
@@ -44,13 +44,24 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     return new NextResponse('Template de proposta sem arquivo .docx. Suba o arquivo no cadastro.', { status: 500 })
   }
 
-  // Para esta primeira versão, o escopo já vem do snapshot na proposta (proposta.escopo_final).
-  // O escopo como .docx separado fica como roadmap pra fase 2.
-  const escopoTexto = proposta.escopo_final ?? ''
-  void escopoTpl
+  // Escopo: se for "padrao" e tiver .docx vinculado → injeta XML rico via {{@escopo}}.
+  // Se for "personalizado" → texto plano vira parágrafos OOXML válidos.
+  let escopoXml = ''
+  if (escopoTpl?.template_file_path && proposta.escopo_tipo !== 'personalizado') {
+    try {
+      escopoXml = await extrairXmlCorpoEscopo(escopoTpl.template_file_path)
+    } catch (e) {
+      return new NextResponse(
+        `Falha ao extrair escopo: ${e instanceof Error ? e.message : 'erro'}`,
+        { status: 500 }
+      )
+    }
+  } else {
+    escopoXml = textoParaXmlParagrafos(proposta.escopo_final ?? '')
+  }
 
   // 2) Preenche o template da proposta
-  const valores = montarValores(proposta, cliente, contratante, escopoTexto)
+  const valores = montarValores(proposta, cliente, contratante, escopoXml)
   let docxPreenchido: Buffer
   try {
     docxPreenchido = await preencherDocx(template.template_file_path, valores)
