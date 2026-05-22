@@ -147,8 +147,9 @@ export interface Parameters {
 
 export interface Contractor {
   id: string
+  tipo: 'PJ' | 'PF'
   razao_social: string
-  cnpj: string
+  documento: string // CNPJ se PJ, CPF se PF
   endereco: string
   ativo: boolean
   criado_em: string

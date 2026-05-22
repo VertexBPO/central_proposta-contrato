@@ -4,7 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { Client, Contractor, Proposal, ContractTemplate, formatCurrency, formatDate } from '@/lib/db/types'
 import { gerarPdf } from '@/lib/docs/gerar-pdf'
 import { renderPlaceholders } from '@/lib/docs/render-placeholders'
-import { formatCnpj } from '@/lib/db/cnpj'
+import { formatCnpj, formatDocumento } from '@/lib/db/cnpj'
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -69,7 +69,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     },
     contratante: {
       razao_social: contratante.razao_social,
-      cnpj: formatCnpj(contratante.cnpj),
+      cnpj: formatDocumento(contratante.documento, contratante.tipo),
     },
     resumoComercial: [
       { label: 'Prazo', valor: `${proposta.prazo_meses} meses` },

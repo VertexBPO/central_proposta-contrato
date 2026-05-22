@@ -1,11 +1,11 @@
 import extenso from 'extenso'
 import { Client, Contractor, Proposal, formatCurrency, formatDate } from '@/lib/db/types'
-import { formatCnpj } from '@/lib/db/cnpj'
+import { formatCnpj, formatDocumento, labelDocumento } from '@/lib/db/cnpj'
 
 export interface PlaceholderContext {
   proposal: Proposal
   cliente: Client
-  contratante: Contractor | { razao_social: string; cnpj: string; endereco: string }
+  contratante: Contractor
 }
 
 const MESES = [
@@ -67,9 +67,14 @@ export function renderPlaceholders(template: string, ctx: PlaceholderContext): s
     nome_cliente: ctx.cliente.responsavel_nome ?? '',
     nome_empresa: ctx.cliente.razao_social,
 
-    // ===== Contratante (Vertex / multi) =====
+    // ===== Contratante (Vertex / multi - PJ ou PF) =====
     contratante_razao_social: ctx.contratante.razao_social,
-    contratante_cnpj: ctx.contratante.cnpj,
+    contratante_nome: ctx.contratante.razao_social,
+    contratante_cnpj: formatDocumento(ctx.contratante.documento, ctx.contratante.tipo),
+    contratante_cpf: formatDocumento(ctx.contratante.documento, ctx.contratante.tipo),
+    contratante_documento: formatDocumento(ctx.contratante.documento, ctx.contratante.tipo),
+    contratante_documento_label: labelDocumento(ctx.contratante.tipo), // "CNPJ" ou "CPF"
+    contratante_tipo: ctx.contratante.tipo,
     contratante_endereco: ctx.contratante.endereco,
 
     // ===== Proposta =====

@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { FormaAceite, StatusProposta, Client, Contractor, Parameters, Proposal, ContractTemplate, EmailTemplate, formatCurrency, formatDate } from '@/lib/db/types'
-import { formatCnpj } from '@/lib/db/cnpj'
+import { formatCnpj, formatDocumento } from '@/lib/db/cnpj'
 import { gerarPdf } from '@/lib/docs/gerar-pdf'
 import { renderPlaceholders } from '@/lib/docs/render-placeholders'
 import { enviarEmail } from '@/lib/email/resend'
@@ -186,11 +186,7 @@ export async function enviarProposta(id: string): Promise<Resultado> {
   const escopoRenderizado = renderPlaceholders(proposta.escopo_final, {
     proposal: proposta,
     cliente,
-    contratante: {
-      razao_social: contratante.razao_social,
-      cnpj: contratante.cnpj,
-      endereco: contratante.endereco,
-    },
+    contratante,
   })
   const pdf = await gerarPdf({
     titulo: `Proposta Comercial Nº ${proposta.numero}`,
@@ -201,7 +197,7 @@ export async function enviarProposta(id: string): Promise<Resultado> {
       cnpj: formatCnpj(cliente.cnpj),
       endereco: corpoEnderecoCliente(cliente),
     },
-    contratante: { razao_social: contratante.razao_social, cnpj: contratante.cnpj },
+    contratante: { razao_social: contratante.razao_social, cnpj: formatDocumento(contratante.documento, contratante.tipo) },
     resumoComercial: [
       { label: 'Prazo', valor: `${proposta.prazo_meses} meses` },
       { label: 'Data de início', valor: formatDate(proposta.data_inicio_contrato) },
@@ -234,20 +230,12 @@ export async function enviarProposta(id: string): Promise<Resultado> {
   const assunto = renderPlaceholders(tpl.assunto, {
     proposal: proposta,
     cliente,
-    contratante: {
-      razao_social: contratante.razao_social,
-      cnpj: contratante.cnpj,
-      endereco: contratante.endereco,
-    },
+    contratante,
   })
   const corpo = renderPlaceholders(tpl.corpo_html, {
     proposal: proposta,
     cliente,
-    contratante: {
-      razao_social: contratante.razao_social,
-      cnpj: contratante.cnpj,
-      endereco: contratante.endereco,
-    },
+    contratante,
   })
 
   // 4) Envia (stub ou real)
@@ -303,11 +291,7 @@ export async function enviarContratoParaAssinatura(id: string): Promise<Resultad
   const corpoRenderizado = renderPlaceholders(ctpl.corpo, {
     proposal: proposta,
     cliente,
-    contratante: {
-      razao_social: contratante.razao_social,
-      cnpj: contratante.cnpj,
-      endereco: contratante.endereco,
-    },
+    contratante,
   })
   const total = Number(proposta.valor_adesao) + Number(proposta.valor_parcela) * proposta.num_parcelas
   const pdf = await gerarPdf({
@@ -319,7 +303,7 @@ export async function enviarContratoParaAssinatura(id: string): Promise<Resultad
       cnpj: formatCnpj(cliente.cnpj),
       endereco: corpoEnderecoCliente(cliente),
     },
-    contratante: { razao_social: contratante.razao_social, cnpj: contratante.cnpj },
+    contratante: { razao_social: contratante.razao_social, cnpj: formatDocumento(contratante.documento, contratante.tipo) },
     resumoComercial: [
       { label: 'Prazo', valor: `${proposta.prazo_meses} meses` },
       { label: 'Data de início', valor: formatDate(proposta.data_inicio_contrato) },

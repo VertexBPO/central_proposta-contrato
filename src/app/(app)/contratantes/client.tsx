@@ -4,10 +4,18 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Contractor } from '@/lib/db/types'
-import { formatCnpj, onlyDigits, validateCnpj } from '@/lib/db/cnpj'
+import {
+  formatDocumento,
+  onlyDigits,
+  validateDocumento,
+  labelDocumento,
+  labelNome,
+  TipoDocumento,
+} from '@/lib/db/cnpj'
 import { Card } from '@/components/Card'
 import { Input } from '@/components/Input'
 import { Textarea } from '@/components/Textarea'
+import { Select } from '@/components/Select'
 import { Button } from '@/components/Button'
 import { Modal } from '@/components/Modal'
 import { Badge } from '@/components/Badge'
@@ -23,8 +31,9 @@ export function ContratantesClient({ contratantes }: Props) {
   const [, startTransition] = useTransition()
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Contractor | null>(null)
+  const [tipo, setTipo] = useState<TipoDocumento>('PJ')
   const [razao, setRazao] = useState('')
-  const [cnpj, setCnpj] = useState('')
+  const [documento, setDocumento] = useState('')
   const [endereco, setEndereco] = useState('')
   const [ativo, setAtivo] = useState(true)
   const [salvando, setSalvando] = useState(false)
@@ -32,8 +41,9 @@ export function ContratantesClient({ contratantes }: Props) {
 
   function abrirNovo() {
     setEditing(null)
+    setTipo('PJ')
     setRazao('')
-    setCnpj('')
+    setDocumento('')
     setEndereco('')
     setAtivo(true)
     setErro(null)
@@ -42,29 +52,37 @@ export function ContratantesClient({ contratantes }: Props) {
 
   function abrirEdicao(c: Contractor) {
     setEditing(c)
+    setTipo(c.tipo)
     setRazao(c.razao_social)
-    setCnpj(formatCnpj(c.cnpj))
+    setDocumento(formatDocumento(c.documento, c.tipo))
     setEndereco(c.endereco)
     setAtivo(c.ativo)
     setErro(null)
     setOpen(true)
   }
 
+  function aoTrocarTipo(novoTipo: TipoDocumento) {
+    setTipo(novoTipo)
+    // Re-formata documento ao trocar tipo
+    setDocumento(formatDocumento(documento, novoTipo))
+  }
+
   async function salvar() {
     setErro(null)
-    if (!razao.trim() || !cnpj || !endereco.trim()) {
-      setErro('Preencha razão social, CNPJ e endereço.')
+    if (!razao.trim() || !documento || !endereco.trim()) {
+      setErro(`Preencha ${labelNome(tipo).toLowerCase()}, ${labelDocumento(tipo)} e endereço.`)
       return
     }
-    const cnpjNumeros = onlyDigits(cnpj)
-    if (!validateCnpj(cnpjNumeros)) {
-      setErro('CNPJ inválido.')
+    const docNumeros = onlyDigits(documento)
+    if (!validateDocumento(docNumeros, tipo)) {
+      setErro(`${labelDocumento(tipo)} inválido.`)
       return
     }
     setSalvando(true)
     const payload = {
+      tipo,
       razao_social: razao.trim(),
-      cnpj: cnpjNumeros,
+      documento: docNumeros,
       endereco: endereco.trim(),
       ativo,
     }
@@ -84,7 +102,7 @@ export function ContratantesClient({ contratantes }: Props) {
     <div style={{ maxWidth: 960, margin: '0 auto' }}>
       <PageHeader
         title="Contratantes"
-        subtitle="Empresas que aparecem como CONTRATADA nas propostas e contratos"
+        subtitle="Empresas (PJ) ou pessoas (PF) que aparecem como CONTRATADA"
         actions={<Button onClick={abrirNovo}>+ Novo contratante</Button>}
       />
 
@@ -99,24 +117,55 @@ export function ContratantesClient({ contratantes }: Props) {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    <Badge variant={c.tipo === 'PJ' ? 'info' : 'primary'}>{c.tipo}</Badge>
                     <h3 style={{ fontSize: 16, fontWeight: 600, color: '#0D1B3E' }}>{c.razao_social}</h3>
                     {!c.ativo && <Badge variant="neutral">Inativo</Badge>}
                   </div>
-                  <div style={{ fontSize: 13, color: '#8A9AB5', marginBottom: 4 }}>CNPJ {formatCnpj(c.cnpj)}</div>
+                  <div style={{ fontSize: 13, color: '#8A9AB5', marginBottom: 4 }}>
+                    {labelDocumento(c.tipo)} {formatDocumento(c.documento, c.tipo)}
+                  </div>
                   <div style={{ fontSize: 13, color: '#0D1B3E' }}>{c.endereco}</div>
                 </div>
-                <Button variant="secondary" onClick={() => abrirEdicao(c)}>Editar</Button>
+                <Button variant="secondary" onClick={() => abrirEdicao(c)}>
+                  Editar
+                </Button>
               </div>
             </Card>
           ))}
         </div>
       )}
 
-      <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Editar contratante' : 'Novo contratante'} maxWidth={560}>
+      <Modal
+        open={open}
+        onClose={() => setOpen(false)}
+        title={editing ? 'Editar contratante' : 'Novo contratante'}
+        maxWidth={560}
+      >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <Input label="Razão social" value={razao} onChange={(e) => setRazao(e.target.value)} placeholder="Vertex BPO e Assessoria Empresarial" />
-          <Input label="CNPJ" value={cnpj} onChange={(e) => setCnpj(formatCnpj(e.target.value))} placeholder="00.000.000/0000-00" inputMode="numeric" />
-          <Textarea label="Endereço" value={endereco} onChange={(e) => setEndereco(e.target.value)} rows={3} placeholder="Vila Velha, ES" />
+          <Select label="Tipo" value={tipo} onChange={(e) => aoTrocarTipo(e.target.value as TipoDocumento)}>
+            <option value="PJ">Pessoa Jurídica (CNPJ)</option>
+            <option value="PF">Pessoa Física (CPF)</option>
+          </Select>
+          <Input
+            label={labelNome(tipo)}
+            value={razao}
+            onChange={(e) => setRazao(e.target.value)}
+            placeholder={tipo === 'PJ' ? 'Vertex BPO e Assessoria Empresarial' : 'Sandro Alves'}
+          />
+          <Input
+            label={labelDocumento(tipo)}
+            value={documento}
+            onChange={(e) => setDocumento(formatDocumento(e.target.value, tipo))}
+            placeholder={tipo === 'PJ' ? '00.000.000/0000-00' : '000.000.000-00'}
+            inputMode="numeric"
+          />
+          <Textarea
+            label="Endereço"
+            value={endereco}
+            onChange={(e) => setEndereco(e.target.value)}
+            rows={3}
+            placeholder="Rua X, nº Y, Vila Velha/ES, CEP 00000-000"
+          />
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
             <input type="checkbox" checked={ativo} onChange={(e) => setAtivo(e.target.checked)} />
             <span style={{ fontSize: 14 }}>Ativo (disponível para uso em propostas)</span>
@@ -129,8 +178,12 @@ export function ContratantesClient({ contratantes }: Props) {
           )}
 
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
-            <Button variant="ghost" onClick={() => setOpen(false)}>Cancelar</Button>
-            <Button onClick={salvar} loading={salvando}>{editing ? 'Salvar' : 'Criar'}</Button>
+            <Button variant="ghost" onClick={() => setOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={salvar} loading={salvando}>
+              {editing ? 'Salvar' : 'Criar'}
+            </Button>
           </div>
         </div>
       </Modal>
