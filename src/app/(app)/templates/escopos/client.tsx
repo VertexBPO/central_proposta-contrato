@@ -7,7 +7,6 @@ import { ScopeTemplate, slugify } from '@/lib/db/types'
 import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
 import { Input } from '@/components/Input'
-import { Textarea } from '@/components/Textarea'
 import { Modal } from '@/components/Modal'
 import { Badge } from '@/components/Badge'
 import { PageHeader } from '@/components/PageHeader'
@@ -135,14 +134,6 @@ export function TemplatesEscoposClient({ escopos }: Props) {
               setCorpo(texto)
               if (!nome.trim()) setNome(texto.split('\n')[0].slice(0, 80))
             }}
-          />
-          <Textarea
-            label="Corpo do escopo"
-            value={corpo}
-            onChange={(e) => setCorpo(e.target.value)}
-            rows={14}
-            style={{ minHeight: 280, fontFamily: 'monospace', fontSize: 13 }}
-            placeholder="Texto completo do escopo. Pode usar quebra de linha e formatação simples."
           />
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
             <input type="checkbox" checked={ativo} onChange={(e) => setAtivo(e.target.checked)} />

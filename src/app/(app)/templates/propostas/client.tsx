@@ -7,7 +7,6 @@ import { ContractTemplate, ProposalTemplate, slugify } from '@/lib/db/types'
 import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
 import { Input } from '@/components/Input'
-import { Textarea } from '@/components/Textarea'
 import { Select } from '@/components/Select'
 import { Modal } from '@/components/Modal'
 import { Badge } from '@/components/Badge'
@@ -173,14 +172,6 @@ export function TemplatesPropostasClient({ templates, contratos }: Props) {
             ))}
           </Select>
           <UploadDocx onTextoExtraido={(texto) => setEscopo(texto)} />
-          <Textarea
-            label="Escopo padrão (opcional, com placeholders)"
-            value={escopo}
-            onChange={(e) => setEscopo(e.target.value)}
-            placeholder="Use {{razao_social}}, {{cnpj}}, {{prazo_meses}}, etc."
-            rows={14}
-            style={{ minHeight: 240, fontFamily: 'monospace', fontSize: 13 }}
-          />
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
             <input type="checkbox" checked={ativo} onChange={(e) => setAtivo(e.target.checked)} />
             <span style={{ fontSize: 14 }}>Ativo (disponível para operador)</span>

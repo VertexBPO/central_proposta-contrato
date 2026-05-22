@@ -61,18 +61,19 @@ export function UploadDocx({ onTextoExtraido }: Props) {
         }}
       />
       <Button type="button" variant="secondary" onClick={onPick} disabled={loading}>
-        {loading ? 'Extraindo…' : '📎 Carregar .docx'}
+        {loading ? 'Processando…' : '📎 Upload .docx'}
       </Button>
       <div style={{ flex: 1, minWidth: 0, fontSize: 12, color: '#8A9AB5' }}>
         {erro ? (
           <span style={{ color: '#D64545' }}>{erro}</span>
         ) : nomeArquivo ? (
           <>
+            <span style={{ color: '#1B9E5C', fontWeight: 600 }}>✓</span>{' '}
             <strong style={{ color: '#0D1B3E' }}>{nomeArquivo}</strong>
-            {!loading && <span style={{ marginLeft: 8 }}>· texto carregado abaixo</span>}
+            {!loading && <span style={{ marginLeft: 8 }}>· pronto</span>}
           </>
         ) : (
-          <>Arquivo Word com o conteúdo. O texto vai aparecer abaixo pra você revisar.</>
+          <>Arquivo Word com `{`{`}placeholders{`}`}` já definidos. Edite o conteúdo no Word antes de subir.</>
         )}
       </div>
     </div>

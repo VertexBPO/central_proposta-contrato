@@ -7,7 +7,6 @@ import { ContractTemplate, slugify } from '@/lib/db/types'
 import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
 import { Input } from '@/components/Input'
-import { Textarea } from '@/components/Textarea'
 import { Modal } from '@/components/Modal'
 import { Badge } from '@/components/Badge'
 import { PageHeader } from '@/components/PageHeader'
@@ -128,14 +127,6 @@ export function TemplatesContratosClient({ templates }: Props) {
             placeholder="contrato-bpo-financeiro"
           />
           <UploadDocx onTextoExtraido={(texto) => setCorpo(texto)} />
-          <Textarea
-            label="Corpo do contrato (com placeholders)"
-            value={corpo}
-            onChange={(e) => setCorpo(e.target.value)}
-            placeholder="Use {{razao_social}}, {{cnpj}}, {{valor_total}}, {{prazo_meses}}, {{data_inicio}}, {{escopo}}…"
-            rows={16}
-            style={{ minHeight: 280, fontFamily: 'monospace', fontSize: 13 }}
-          />
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
             <input type="checkbox" checked={ativo} onChange={(e) => setAtivo(e.target.checked)} />
             <span style={{ fontSize: 14 }}>Ativo (disponível para uso)</span>
