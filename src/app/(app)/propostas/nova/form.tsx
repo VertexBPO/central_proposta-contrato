@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Client, Contractor, ProposalTemplate, ScopeTemplate, EscopoTipo, formatCurrency } from '@/lib/db/types'
 import { formatCnpj, onlyDigits } from '@/lib/db/cnpj'
@@ -55,6 +55,7 @@ export function NovaPropostaForm({ templates, escopos, contratantes, clientePre 
   // CNPJ lookup
   const [buscandoCnpj, setBuscandoCnpj] = useState(false)
   const [avisoCnpj, setAvisoCnpj] = useState<string | null>(null)
+  const ultimoCnpjBuscado = useRef<string>('')
 
   // Contratada (Vertex)
   const [contractorId, setContractorId] = useState(contratantes[0]?.id ?? '')
@@ -86,13 +87,10 @@ export function NovaPropostaForm({ templates, escopos, contratantes, clientePre 
 
   const valorTotal = Number(valorAdesao) + Number(valorParcela) * Number(parcelas)
 
-  async function buscarCnpjNaReceita() {
+  async function buscarCnpjNaReceita(digits: string) {
+    if (ultimoCnpjBuscado.current === digits) return
+    ultimoCnpjBuscado.current = digits
     setAvisoCnpj(null)
-    const digits = onlyDigits(cnpj)
-    if (digits.length !== 14) {
-      setAvisoCnpj('CNPJ precisa ter 14 dígitos.')
-      return
-    }
     setBuscandoCnpj(true)
     try {
       const resp = await fetch(`/api/cnpj/${digits}`, { cache: 'no-store' })
@@ -118,6 +116,19 @@ export function NovaPropostaForm({ templates, escopos, contratantes, clientePre 
       setBuscandoCnpj(false)
     }
   }
+
+  // Auto-busca CNPJ com debounce de 400ms quando completa 14 dígitos
+  useEffect(() => {
+    if (clientePre) return
+    const digits = onlyDigits(cnpj)
+    if (digits.length !== 14) {
+      ultimoCnpjBuscado.current = ''
+      return
+    }
+    const t = setTimeout(() => buscarCnpjNaReceita(digits), 400)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cnpj, clientePre])
 
   function aoTrocarTemplate(id: string) {
     setTemplateId(id)
@@ -244,21 +255,17 @@ export function NovaPropostaForm({ templates, escopos, contratantes, clientePre 
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
-                <div style={{ flex: 1 }}>
-                  <Input
-                    label="CNPJ"
-                    value={cnpj}
-                    onChange={(e) => setCnpj(formatCnpj(e.target.value))}
-                    placeholder="00.000.000/0000-00"
-                    inputMode="numeric"
-                  />
-                </div>
-                <Button type="button" variant="secondary" onClick={buscarCnpjNaReceita} loading={buscandoCnpj}>
-                  Buscar na Receita
-                </Button>
-              </div>
-              {avisoCnpj && (
+              <Input
+                label="CNPJ"
+                value={cnpj}
+                onChange={(e) => setCnpj(formatCnpj(e.target.value))}
+                placeholder="00.000.000/0000-00 (busca automática ao completar)"
+                inputMode="numeric"
+              />
+              {buscandoCnpj && (
+                <div style={{ fontSize: 12, color: '#8A9AB5' }}>Consultando Receita…</div>
+              )}
+              {!buscandoCnpj && avisoCnpj && (
                 <div
                   style={{
                     fontSize: 12,
