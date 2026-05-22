@@ -1,18 +1,18 @@
 /**
  * Aplica alpha 30% em imagens marcadas como watermark dentro do .docx.
  *
- * LibreOffice (engine do CloudConvert) ignora os atributos de "Washout" do Word
- * (gain/blacklevel em VML, a:lum em DrawingML), então a transparência precisa estar
- * embutida no pixel da imagem.
+ * LibreOffice (engine do CloudConvert) ignora vários atributos do Word
+ * (gain/blacklevel, a:lum, a:alphaModFix), então a transparência precisa
+ * estar embutida no pixel da imagem.
  *
- * Estratégia:
- * 1. Lê todos os word/header*.xml
- * 2. Identifica elementos de watermark (gain/blacklevel/lum)
- * 3. Pra cada watermark único, gera uma cópia da imagem com alpha 30% baked-in
- * 4. Adiciona um novo Relationship apontando pra cópia
- * 5. Atualiza o XML do header pra usar o novo rId
+ * Detecção (qualquer um dos critérios faz a imagem virar watermark):
+ *  - Dentro de <w:pict> (formato VML legado, usado pelo menu Marca d'Água do Word)
+ *  - Dentro de <wp:anchor behindDoc="1"> (imagem atrás do texto)
+ *  - Com <a:lum> ou <a:alphaModFix> (transparência explícita)
+ *  - Com atributo gain/blacklevel em <v:imagedata>
  *
- * O original (header logo, por exemplo) fica intacto.
+ * Pra cada watermark única, gera uma cópia do PNG com alpha 30% baked-in e
+ * substitui o rId no XML. Header logo (inline normal) fica intacto.
  */
 import JSZip from 'jszip'
 import sharp from 'sharp'
@@ -20,15 +20,22 @@ import sharp from 'sharp'
 export async function aplicarAlphaNasWatermarks(docxBuffer: Buffer): Promise<Buffer> {
   const zip = await JSZip.loadAsync(docxBuffer)
 
-  const headerPaths = Object.keys(zip.files).filter((n) => /^word\/header\d+\.xml$/.test(n))
+  const xmlPaths = Object.keys(zip.files).filter(
+    (n) =>
+      n === 'word/document.xml' ||
+      /^word\/header\d+\.xml$/.test(n) ||
+      /^word\/footer\d+\.xml$/.test(n),
+  )
 
-  for (const headerPath of headerPaths) {
-    const headerFile = zip.file(headerPath)
-    if (!headerFile) continue
-    let headerXml = await headerFile.async('string')
+  let totalProcessadas = 0
 
-    const headerName = headerPath.split('/').pop()
-    const relsPath = `word/_rels/${headerName}.rels`
+  for (const xmlPath of xmlPaths) {
+    const xmlFile = zip.file(xmlPath)
+    if (!xmlFile) continue
+    let xml = await xmlFile.async('string')
+
+    const xmlName = xmlPath.split('/').pop()!
+    const relsPath = `word/_rels/${xmlName}.rels`
     const relsFile = zip.file(relsPath)
     if (!relsFile) continue
     let relsXml = await relsFile.async('string')
@@ -42,9 +49,32 @@ export async function aplicarAlphaNasWatermarks(docxBuffer: Buffer): Promise<Buf
 
     const watermarkRIds = new Set<string>()
 
-    // VML: <v:imagedata r:id="rIdX" gain="..." blacklevel="..."/>
+    // 1. Qualquer imagem dentro de <w:pict> (formato VML legado / menu Marca d'Água)
+    const pictRegex = /<w:pict>([\s\S]*?)<\/w:pict>/g
+    while ((m = pictRegex.exec(xml)) !== null) {
+      const ridMatches = m[1].matchAll(/r:id="([^"]+)"/g)
+      for (const rm of ridMatches) watermarkRIds.add(rm[1])
+    }
+
+    // 2. Imagens em <wp:anchor behindDoc="1"> (imagem atrás do texto - moderno)
+    const anchorRegex = /<wp:anchor[^>]*behindDoc="1"[^>]*>([\s\S]*?)<\/wp:anchor>/g
+    while ((m = anchorRegex.exec(xml)) !== null) {
+      const ridMatches = m[1].matchAll(/r:embed="([^"]+)"/g)
+      for (const rm of ridMatches) watermarkRIds.add(rm[1])
+    }
+
+    // 3. <a:blip> com <a:lum> ou <a:alphaModFix> (transparência explícita)
+    const blipRegex = /<a:blip\s+([^>]*?)>([\s\S]*?)<\/a:blip>/g
+    while ((m = blipRegex.exec(xml)) !== null) {
+      if (m[2].includes('a:lum') || m[2].includes('a:alphaModFix')) {
+        const embedMatch = m[1].match(/r:embed="([^"]+)"/)
+        if (embedMatch) watermarkRIds.add(embedMatch[1])
+      }
+    }
+
+    // 4. <v:imagedata gain="..." blacklevel="..."/> (washout VML clássico)
     const vmlRegex = /<v:imagedata\s+([^/>]+)\/?>/g
-    while ((m = vmlRegex.exec(headerXml)) !== null) {
+    while ((m = vmlRegex.exec(xml)) !== null) {
       const attrs = m[1]
       if (attrs.includes('gain=') || attrs.includes('blacklevel=')) {
         const ridMatch = attrs.match(/r:id="([^"]+)"/)
@@ -52,18 +82,8 @@ export async function aplicarAlphaNasWatermarks(docxBuffer: Buffer): Promise<Buf
       }
     }
 
-    // DrawingML: <a:blip r:embed="rIdX">...<a:lum bright="..." contrast="..."/>...</a:blip>
-    const blipRegex = /<a:blip\s+([^>]*?)>([\s\S]*?)<\/a:blip>/g
-    while ((m = blipRegex.exec(headerXml)) !== null) {
-      if (m[2].includes('a:lum')) {
-        const embedMatch = m[1].match(/r:embed="([^"]+)"/)
-        if (embedMatch) watermarkRIds.add(embedMatch[1])
-      }
-    }
-
     if (watermarkRIds.size === 0) continue
 
-    // Pra cada watermark, cria cópia com alpha aplicado
     const oldToNewRid: Record<string, string> = {}
     let suffix = 0
     for (const rId of watermarkRIds) {
@@ -105,7 +125,9 @@ export async function aplicarAlphaNasWatermarks(docxBuffer: Buffer): Promise<Buf
       zip.file(newImagePath, modified)
 
       const newRId = `rIdWM${suffix}${Math.random().toString(36).slice(2, 6)}`
-      const newTarget = newImagePath.startsWith('word/') ? newImagePath.slice(5) : newImagePath
+      const newTarget = newImagePath.startsWith('word/')
+        ? newImagePath.slice(5)
+        : newImagePath
 
       relsXml = relsXml.replace(
         /<\/Relationships>/,
@@ -113,20 +135,20 @@ export async function aplicarAlphaNasWatermarks(docxBuffer: Buffer): Promise<Buf
       )
 
       oldToNewRid[rId] = newRId
+      totalProcessadas += 1
     }
 
     if (Object.keys(oldToNewRid).length === 0) continue
 
-    // Atualiza o XML do header: troca r:id e r:embed apenas dentro de blocos de watermark.
-    // Como rIds são locais ao header e a watermark normalmente usa um rId exclusivo, podemos trocar globalmente.
     for (const [oldRid, newRid] of Object.entries(oldToNewRid)) {
-      headerXml = headerXml.replace(new RegExp(`r:id="${oldRid}"`, 'g'), `r:id="${newRid}"`)
-      headerXml = headerXml.replace(new RegExp(`r:embed="${oldRid}"`, 'g'), `r:embed="${newRid}"`)
+      xml = xml.replace(new RegExp(`r:id="${oldRid}"`, 'g'), `r:id="${newRid}"`)
+      xml = xml.replace(new RegExp(`r:embed="${oldRid}"`, 'g'), `r:embed="${newRid}"`)
     }
 
-    zip.file(headerPath, headerXml)
+    zip.file(xmlPath, xml)
     zip.file(relsPath, relsXml)
   }
 
+  void totalProcessadas
   return await zip.generateAsync({ type: 'nodebuffer' })
 }
