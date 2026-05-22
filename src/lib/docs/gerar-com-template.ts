@@ -34,6 +34,9 @@ export async function extrairXmlCorpoEscopo(storagePath: string): Promise<string
   let body = bodyMatch[1]
 
   body = body.replace(/<w:sectPr[\s\S]*?<\/w:sectPr>/g, '')
+  // Remove page breaks explícitos do escopo (não devem forçar quebra na proposta)
+  body = body.replace(/<w:br\s+w:type="page"\s*\/>/g, '')
+  body = body.replace(/<w:pageBreakBefore\s*\/>/g, '')
   body = converterListasParaTexto(body, numberingXml)
   return body.trim()
 }
@@ -75,8 +78,11 @@ function mapNumIdParaFormato(numberingXml: string): Record<string, Record<number
 }
 
 /**
- * Converte cada parágrafo de lista em parágrafo comum com prefixo textual ("• ", "1. ").
- * Remove <w:numPr> pra não usar numbering.xml do escopo (que conflita com o da proposta).
+ * Corretor de formatação do escopo. Roda em todo parágrafo:
+ *  1. Força <w:jc w:val="both"/> (justificado) em todo parágrafo
+ *  2. Converte listas em texto: remove <w:numPr>, adiciona prefixo "• "/"1. "
+ *  3. Adiciona indentação (<w:ind w:left="...">) pra dar hierarquia visual
+ *  4. Limpa <w:keepNext/> e <w:pageBreakBefore/> que geram espaços mortos
  */
 function converterListasParaTexto(bodyXml: string, numberingXml: string): string {
   const numFmts = mapNumIdParaFormato(numberingXml)
@@ -87,51 +93,74 @@ function converterListasParaTexto(bodyXml: string, numberingXml: string): string
     /<w:p[\s>][\s\S]*?<\/w:p>/g,
     (paragraph) => {
       const numPrMatch = paragraph.match(/<w:numPr>([\s\S]*?)<\/w:numPr>/)
-      if (!numPrMatch) {
-        // Reseta contadores quando sai de lista
-        for (const k of Object.keys(counters)) counters[k] = {}
-        return paragraph
-      }
 
-      const numIdMatch = numPrMatch[1].match(/<w:numId\s+w:val="(\d+)"/)
-      const ilvlMatch = numPrMatch[1].match(/<w:ilvl\s+w:val="(\d+)"/)
-      if (!numIdMatch) return paragraph
+      let prefix = ''
+      let leftIndent = 0
+      let isListItem = false
 
-      const numId = numIdMatch[1]
-      const ilvl = ilvlMatch ? parseInt(ilvlMatch[1], 10) : 0
-      const fmt = numFmts[numId]?.[ilvl] || 'bullet'
+      if (numPrMatch) {
+        isListItem = true
+        const numIdMatch = numPrMatch[1].match(/<w:numId\s+w:val="(\d+)"/)
+        const ilvlMatch = numPrMatch[1].match(/<w:ilvl\s+w:val="(\d+)"/)
 
-      let prefix: string
-      if (fmt === 'bullet') {
-        prefix = '  '.repeat(ilvl) + (bullets[ilvl] || '• ')
+        if (numIdMatch) {
+          const numId = numIdMatch[1]
+          const ilvl = ilvlMatch ? parseInt(ilvlMatch[1], 10) : 0
+          const fmt = numFmts[numId]?.[ilvl] || 'bullet'
+
+          if (fmt === 'bullet') {
+            prefix = bullets[Math.min(ilvl, bullets.length - 1)] || '• '
+          } else {
+            counters[numId] = counters[numId] || {}
+            counters[numId][ilvl] = (counters[numId][ilvl] || 0) + 1
+            prefix = `${counters[numId][ilvl]}. `
+          }
+          leftIndent = 360 * (ilvl + 1)
+        }
       } else {
-        counters[numId] = counters[numId] || {}
-        counters[numId][ilvl] = (counters[numId][ilvl] || 0) + 1
-        prefix = '  '.repeat(ilvl) + `${counters[numId][ilvl]}. `
+        for (const k of Object.keys(counters)) counters[k] = {}
       }
 
-      // Remove <w:numPr> pra desfazer a lista
-      let cleaned = paragraph.replace(/<w:numPr>[\s\S]*?<\/w:numPr>/, '')
+      // Remove <w:numPr>, <w:keepNext>, <w:pageBreakBefore>
+      let cleaned = paragraph
+        .replace(/<w:numPr>[\s\S]*?<\/w:numPr>/g, '')
+        .replace(/<w:keepNext\s*\/>/g, '')
+        .replace(/<w:pageBreakBefore\s*\/>/g, '')
 
-      // Insere prefix no primeiro <w:t>
-      let prefixed = false
-      cleaned = cleaned.replace(/<w:t([^>]*)>([\s\S]*?)<\/w:t>/, (_full, attrs: string, text: string) => {
-        if (prefixed) return _full
-        prefixed = true
-        const finalAttrs = attrs.includes('xml:space') ? attrs : ' xml:space="preserve"'
-        return `<w:t${finalAttrs}>${prefix}${text}</w:t>`
-      })
+      // Força justificado + indent (se for lista). Remove jc e ind antigos, injeta os novos.
+      const indentProp = leftIndent > 0 ? `<w:ind w:left="${leftIndent}"/>` : ''
+      const formatProps = `<w:jc w:val="both"/>${indentProp}`
 
-      // Se não havia texto, cria um run com o prefix
-      if (!prefixed) {
-        cleaned = cleaned.replace(
-          /<\/w:p>$/,
-          `<w:r><w:t xml:space="preserve">${prefix}</w:t></w:r></w:p>`
-        )
+      if (cleaned.includes('<w:pPr>')) {
+        cleaned = cleaned.replace(/<w:pPr>([\s\S]*?)<\/w:pPr>/, (_full, inner: string) => {
+          const cleanInner = inner
+            .replace(/<w:jc[^/]*\/>/g, '')
+            .replace(/<w:ind[^/]*\/>/g, '')
+          return `<w:pPr>${cleanInner}${formatProps}</w:pPr>`
+        })
+      } else {
+        cleaned = cleaned.replace(/(<w:p[^>]*>)/, `$1<w:pPr>${formatProps}</w:pPr>`)
+      }
+
+      // Adiciona prefix do bullet
+      if (isListItem && prefix) {
+        let prefixed = false
+        cleaned = cleaned.replace(/<w:t([^>]*)>([\s\S]*?)<\/w:t>/, (full, attrs: string, text: string) => {
+          if (prefixed) return full
+          prefixed = true
+          const finalAttrs = attrs.includes('xml:space') ? attrs : ' xml:space="preserve"'
+          return `<w:t${finalAttrs}>${prefix}${text}</w:t>`
+        })
+        if (!prefixed) {
+          cleaned = cleaned.replace(
+            /<\/w:p>$/,
+            `<w:r><w:t xml:space="preserve">${prefix}</w:t></w:r></w:p>`,
+          )
+        }
       }
 
       return cleaned
-    }
+    },
   )
 }
 
