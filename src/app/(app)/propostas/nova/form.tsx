@@ -32,7 +32,7 @@ export function NovaPropostaForm({ templates, escopos, contratantes, clientePre 
   const router = useRouter()
 
   // Cliente
-  const [clientId, setClientId] = useState<string | null>(clientePre?.id ?? null)
+  const [clientId] = useState<string | null>(clientePre?.id ?? null)
   const [cnpj, setCnpj] = useState(clientePre?.cnpj ? formatCnpj(clientePre.cnpj) : '')
   const [razaoSocial, setRazaoSocial] = useState(clientePre?.razao_social ?? '')
   const [emailCliente, setEmailCliente] = useState(clientePre?.email ?? '')

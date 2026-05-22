@@ -272,7 +272,7 @@ export async function enviarContratoParaAssinatura(id: string): Promise<Resultad
 
   const dados = await carregarPropostaCompleta(id)
   if (!dados) return { ok: false, erro: 'Proposta não encontrada.' }
-  const { proposta, cliente, contratante, parametros, contractTemplateId } = dados
+  const { proposta, cliente, contratante, contractTemplateId } = dados
 
   if (proposta.status !== 'fechada') {
     return { ok: false, erro: 'A proposta precisa estar fechada para gerar o contrato.' }

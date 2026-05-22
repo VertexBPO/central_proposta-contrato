@@ -96,7 +96,7 @@ export function ParametrosForm({ parametros }: { parametros: Parameters }) {
         </div>
 
         <p style={{ fontSize: 12, color: '#8A9AB5', marginTop: 16 }}>
-          💡 Os <strong>contratantes</strong> (razão social, CNPJ, endereço) agora são cadastrados em uma página separada → acessar pelo menu <strong>"Contratantes"</strong>.
+          💡 Os <strong>contratantes</strong> (razão social, CNPJ, endereço) agora são cadastrados em uma página separada → acessar pelo menu <strong>Contratantes</strong>.
         </p>
 
         {erro && (
