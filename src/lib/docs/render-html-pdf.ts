@@ -189,15 +189,15 @@ export function renderizarHtmlNoPdf(state: RenderState, html: string) {
         renderizarParagrafo(state, segsBold(segs), 14, 20, 10, 0)
         break
       case 'h2':
-        state.cursorY -= 12 // espaçamento duplo antes
-        renderizarParagrafo(state, segsBold(segs), 14, 20, 8, 12)
+        state.cursorY -= 10 // espaço antes
+        renderizarParagrafo(state, segsBold(segs), 12, 18, 8, 0)
         break
       case 'h3':
-        state.cursorY -= 6
-        renderizarParagrafo(state, segsBold(segs), 12, 17, 6, 24)
+        state.cursorY -= 4
+        renderizarParagrafo(state, segsBold(segs), 11, 16, 6, 16)
         break
       case 'p':
-        renderizarParagrafo(state, segs, 10.5, 15, 5)
+        renderizarParagrafo(state, segs, 10.5, 15, 6)
         break
       case 'ul':
         listaTipo = 'ul'
@@ -221,13 +221,13 @@ export function renderizarHtmlNoPdf(state: RenderState, html: string) {
           [{ texto: marcador, bold: false, italic: false }, ...segs],
           10.5,
           15,
-          3,
+          4,
           24
         )
         break
       }
       case 'blockquote':
-        renderizarParagrafo(state, segs.map((s) => ({ ...s, italic: true })), 10.5, 15, 5, 24)
+        renderizarParagrafo(state, segs.map((s) => ({ ...s, italic: true })), 10.5, 15, 6, 24)
         break
       case 'br':
         state.cursorY -= 6

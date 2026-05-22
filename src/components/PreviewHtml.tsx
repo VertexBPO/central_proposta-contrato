@@ -13,6 +13,7 @@ export function PreviewHtml({ open, onClose, titulo, html }: Props) {
   return (
     <Modal open={open} onClose={onClose} title={titulo} maxWidth={820}>
       <div
+        className="preview-html"
         style={{
           background: '#FFFFFF',
           border: '1px solid #E5EAF2',
@@ -28,39 +29,47 @@ export function PreviewHtml({ open, onClose, titulo, html }: Props) {
         dangerouslySetInnerHTML={{ __html: html || '<p style="color:#8A9AB5">Vazio.</p>' }}
       />
       <style jsx global>{`
-        .preview-html h1,
-        .ProseMirror h1 {
+        .preview-html {
+          font-family: Calibri, "Calibri Light", system-ui, sans-serif;
+        }
+        .preview-html h1 {
           font-size: 18px;
           font-weight: 700;
-          margin: 18px 0 10px;
+          margin: 22px 0 10px;
           color: #000;
         }
-        .preview-html h2,
-        .ProseMirror h2 {
-          font-size: 18px;
-          font-weight: 700;
-          margin: 16px 0 8px 16px;
-          color: #000;
-        }
-        .preview-html h3,
-        .ProseMirror h3 {
+        .preview-html h2 {
           font-size: 15px;
           font-weight: 700;
-          margin: 12px 0 6px 32px;
+          margin: 18px 0 6px;
           color: #000;
         }
-        .preview-html p,
-        .ProseMirror p {
-          margin: 8px 0;
+        .preview-html h3 {
+          font-size: 14px;
+          font-weight: 700;
+          margin: 14px 0 4px 16px;
           color: #000;
+        }
+        .preview-html p {
+          margin: 6px 0;
+          color: #000;
+          font-weight: 300;
         }
         .preview-html ul,
         .preview-html ol {
           padding-left: 28px;
-          margin: 8px 0;
+          margin: 6px 0 10px;
+        }
+        .preview-html li {
+          margin: 4px 0;
+          color: #000;
+          font-weight: 300;
         }
         .preview-html strong {
           font-weight: 700;
+        }
+        .preview-html em {
+          font-style: italic;
         }
       `}</style>
     </Modal>
