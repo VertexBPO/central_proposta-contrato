@@ -5,6 +5,7 @@ import { Client, Contractor, Proposal, ProposalTemplate, ScopeTemplate } from '@
 import { preencherDocx, extrairXmlCorpoEscopo, textoParaXmlParagrafos } from '@/lib/docs/gerar-com-template'
 import { docxParaPdf } from '@/lib/cloudconvert/client'
 import { montarValores } from '@/lib/docs/valores-placeholders'
+import { aplicarAlphaNasWatermarks } from '@/lib/docs/watermark-alpha'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -70,6 +71,13 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       `Falha ao preencher .docx: ${e instanceof Error ? e.message : 'erro'}`,
       { status: 500 }
     )
+  }
+
+  // 2b) Aplica alpha 30% nas watermarks (LibreOffice ignora o "Washout" do Word)
+  try {
+    docxPreenchido = await aplicarAlphaNasWatermarks(docxPreenchido)
+  } catch {
+    // Falha aqui não bloqueia geração — só perde a transparência
   }
 
   // 3) Converte pra PDF via CloudConvert
