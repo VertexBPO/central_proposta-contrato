@@ -93,6 +93,7 @@ export interface Proposal {
   id: string
   numero: string
   client_id: string
+  contractor_id: string | null
   proposal_template_id: string
   contract_template_id_override: string | null
   operador_id: string
@@ -138,12 +139,19 @@ export interface Contract {
 export interface Parameters {
   id: 1
   email_vertex: string
-  contratante_razao_social: string
-  contratante_cnpj: string
-  contratante_endereco: string
   intervalo_lembrete_dias: number
   max_lembretes: number
   timeout_contrato_dias: number
+  atualizado_em: string
+}
+
+export interface Contractor {
+  id: string
+  razao_social: string
+  cnpj: string
+  endereco: string
+  ativo: boolean
+  criado_em: string
   atualizado_em: string
 }
 

@@ -14,6 +14,8 @@ interface NovaPropostaInput {
   cnpj?: string
   razao_social?: string
   email_cliente?: string
+  // contratante (CONTRATADA)
+  contractor_id: string
   // proposta
   proposal_template_id: string
   escopo_tipo: EscopoTipo
@@ -98,12 +100,15 @@ export async function criarProposta(input: NovaPropostaInput): Promise<Resultado
     magic_link_expira_em = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
   }
 
+  if (!input.contractor_id) return { ok: false, erro: 'Selecione um contratante.' }
+
   // 5) Criar proposta
   const { data: proposta, error: e3 } = await admin
     .from('proposals')
     .insert({
       numero,
       client_id: clientId,
+      contractor_id: input.contractor_id,
       proposal_template_id: input.proposal_template_id,
       operador_id: user.id,
       status: 'rascunho',

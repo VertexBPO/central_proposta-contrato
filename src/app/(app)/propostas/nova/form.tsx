@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Client, ProposalTemplate, EscopoTipo, formatCurrency } from '@/lib/db/types'
+import { Client, Contractor, ProposalTemplate, EscopoTipo, formatCurrency } from '@/lib/db/types'
 import { formatCnpj, onlyDigits } from '@/lib/db/cnpj'
 import { Card } from '@/components/Card'
 import { Input } from '@/components/Input'
@@ -14,6 +14,7 @@ import { criarProposta } from './actions'
 
 interface Props {
   templates: ProposalTemplate[]
+  contratantes: Contractor[]
   clientePre: Client | null
 }
 
@@ -26,7 +27,7 @@ function inputMoneyFormat(n: number): string {
   return n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
-export function NovaPropostaForm({ templates, clientePre }: Props) {
+export function NovaPropostaForm({ templates, contratantes, clientePre }: Props) {
   const router = useRouter()
 
   // Cliente
@@ -34,6 +35,9 @@ export function NovaPropostaForm({ templates, clientePre }: Props) {
   const [cnpj, setCnpj] = useState(clientePre?.cnpj ? formatCnpj(clientePre.cnpj) : '')
   const [razaoSocial, setRazaoSocial] = useState(clientePre?.razao_social ?? '')
   const [emailCliente, setEmailCliente] = useState(clientePre?.email ?? '')
+
+  // Contratante
+  const [contractorId, setContractorId] = useState(contratantes[0]?.id ?? '')
 
   // Proposta
   const [templateId, setTemplateId] = useState(templates[0]?.id ?? '')
@@ -90,6 +94,10 @@ export function NovaPropostaForm({ templates, clientePre }: Props) {
       setErro('Escolha o template e preencha o escopo.')
       return
     }
+    if (!contractorId) {
+      setErro('Escolha o contratante (cadastre em "Contratantes" se a lista estiver vazia).')
+      return
+    }
     if (prazo <= 0 || parcelas <= 0 || valorParcela <= 0) {
       setErro('Prazo, número de parcelas e valor da parcela devem ser > 0.')
       return
@@ -105,6 +113,7 @@ export function NovaPropostaForm({ templates, clientePre }: Props) {
       cnpj: cnpj ? onlyDigits(cnpj) : undefined,
       razao_social: razaoSocial,
       email_cliente: emailCliente,
+      contractor_id: contractorId,
       proposal_template_id: templateId,
       escopo_tipo: escopoTipo,
       escopo_final: escopo,
@@ -206,6 +215,12 @@ export function NovaPropostaForm({ templates, clientePre }: Props) {
         <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12, color: '#0D1B3E' }}>2. Proposta</h2>
         <Card>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <Select label="Contratante (aparece como CONTRATADA)" value={contractorId} onChange={(e) => setContractorId(e.target.value)}>
+              {contratantes.length === 0 && <option value="">— cadastre um contratante primeiro —</option>}
+              {contratantes.map((c) => (
+                <option key={c.id} value={c.id}>{c.razao_social}</option>
+              ))}
+            </Select>
             <Select label="Template" value={templateId} onChange={(e) => aoTrocarTemplate(e.target.value)}>
               {templates.length === 0 && <option value="">— sem templates cadastrados —</option>}
               {templates.map((t) => (

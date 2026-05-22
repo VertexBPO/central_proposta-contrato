@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { Client, Parameters, Proposal, formatCurrency, formatDate } from '@/lib/db/types'
+import { Client, Contractor, Proposal, formatCurrency, formatDate } from '@/lib/db/types'
 import { gerarPdf } from '@/lib/docs/gerar-pdf'
 import { renderPlaceholders } from '@/lib/docs/render-placeholders'
 import { formatCnpj } from '@/lib/db/cnpj'
 
-export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
-
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return new NextResponse('Unauthorized', { status: 401 })
 
@@ -18,20 +17,16 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!prop) return new NextResponse('Not found', { status: 404 })
 
   const proposta = prop as Proposal
-  const [{ data: cli }, { data: paramsRow }] = await Promise.all([
+  const [{ data: cli }, { data: ctr }] = await Promise.all([
     admin.from('clients').select('*').eq('id', proposta.client_id).maybeSingle(),
-    admin.from('parameters').select('*').eq('id', 1).maybeSingle(),
+    proposta.contractor_id
+      ? admin.from('contractors').select('*').eq('id', proposta.contractor_id).maybeSingle()
+      : Promise.resolve({ data: null }),
   ])
-  if (!cli || !paramsRow) return new NextResponse('Dados incompletos', { status: 500 })
+  if (!cli || !ctr) return new NextResponse('Dados incompletos: configure cliente e contratante.', { status: 500 })
 
   const cliente = cli as Client
-  const par = paramsRow as Parameters
-
-  const contratante = {
-    razao_social: par.contratante_razao_social,
-    cnpj: par.contratante_cnpj,
-    endereco: par.contratante_endereco,
-  }
+  const contratante = ctr as Contractor
 
   const escopoRenderizado = renderPlaceholders(proposta.escopo_final, {
     proposal: proposta,
@@ -61,7 +56,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     },
     contratante: {
       razao_social: contratante.razao_social,
-      cnpj: contratante.cnpj,
+      cnpj: formatCnpj(contratante.cnpj),
     },
     resumoComercial: [
       { label: 'Prazo', valor: `${proposta.prazo_meses} meses` },
@@ -70,10 +65,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       { label: 'Parcelas', valor: `${proposta.num_parcelas} × ${formatCurrency(Number(proposta.valor_parcela))}` },
       { label: 'Valor total', valor: formatCurrency(total) },
     ],
-    dataLocal: `Vila Velha, ES, ${formatDate(proposta.data_proposta)}`,
+    dataLocal: `${contratante.endereco}, ${formatDate(proposta.data_proposta)}`,
   })
 
-  // Salva no Storage se ainda não tem
   if (!proposta.pdf_storage_path) {
     const path = `propostas/${proposta.id}/${proposta.numero}.pdf`
     const { error: uploadErr } = await admin.storage

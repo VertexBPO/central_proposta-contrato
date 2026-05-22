@@ -14,9 +14,6 @@ export function ParametrosForm({ parametros }: { parametros: Parameters }) {
   const supabase = createClient()
 
   const [email, setEmail] = useState(parametros.email_vertex)
-  const [razao, setRazao] = useState(parametros.contratante_razao_social)
-  const [cnpj, setCnpj] = useState(parametros.contratante_cnpj)
-  const [endereco, setEndereco] = useState(parametros.contratante_endereco)
   const [intervalo, setIntervalo] = useState(parametros.intervalo_lembrete_dias)
   const [maxLembretes, setMaxLembretes] = useState(parametros.max_lembretes)
   const [timeoutContrato, setTimeoutContrato] = useState(parametros.timeout_contrato_dias)
@@ -33,9 +30,6 @@ export function ParametrosForm({ parametros }: { parametros: Parameters }) {
       .from('parameters')
       .update({
         email_vertex: email.trim(),
-        contratante_razao_social: razao.trim(),
-        contratante_cnpj: cnpj.trim(),
-        contratante_endereco: endereco.trim(),
         intervalo_lembrete_dias: intervalo,
         max_lembretes: maxLembretes,
         timeout_contrato_dias: timeoutContrato,
@@ -75,24 +69,6 @@ export function ParametrosForm({ parametros }: { parametros: Parameters }) {
             textTransform: 'uppercase',
           }}
         >
-          Dados da Vertex como contratante
-        </h3>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <Input label="Razão social" value={razao} onChange={(e) => setRazao(e.target.value)} />
-          <Input label="CNPJ" value={cnpj} onChange={(e) => setCnpj(e.target.value)} />
-          <Input label="Endereço" value={endereco} onChange={(e) => setEndereco(e.target.value)} />
-        </div>
-
-        <h3
-          style={{
-            fontSize: 14,
-            fontWeight: 700,
-            color: '#0D1B3E',
-            marginTop: 24,
-            marginBottom: 16,
-            textTransform: 'uppercase',
-          }}
-        >
           Lembretes automáticos
         </h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
@@ -118,6 +94,10 @@ export function ParametrosForm({ parametros }: { parametros: Parameters }) {
             onChange={(e) => setTimeoutContrato(Math.max(1, Number(e.target.value) || 1))}
           />
         </div>
+
+        <p style={{ fontSize: 12, color: '#8A9AB5', marginTop: 16 }}>
+          💡 Os <strong>contratantes</strong> (razão social, CNPJ, endereço) agora são cadastrados em uma página separada → acessar pelo menu <strong>"Contratantes"</strong>.
+        </p>
 
         {erro && (
           <div style={{ marginTop: 16, padding: 12, background: '#FCE8E8', color: '#D64545', borderRadius: 10, fontSize: 13 }}>

@@ -16,6 +16,7 @@ const ITENS: ItemMenu[] = [
   { href: '/clientes', label: 'Clientes' },
   { href: '/aprovacoes', label: 'Aprovações', adminOnly: true },
   { href: '/templates/propostas', label: 'Templates', adminOnly: true },
+  { href: '/contratantes', label: 'Contratantes', adminOnly: true },
   { href: '/usuarios', label: 'Usuários', adminOnly: true },
   { href: '/parametros', label: 'Parâmetros', adminOnly: true },
   { href: '/auditoria', label: 'Auditoria', adminOnly: true },

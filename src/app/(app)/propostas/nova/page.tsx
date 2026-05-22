@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { Client, ProposalTemplate } from '@/lib/db/types'
+import { Client, Contractor, ProposalTemplate } from '@/lib/db/types'
 import { NovaPropostaForm } from './form'
 
 export const dynamic = 'force-dynamic'
@@ -16,12 +16,13 @@ export default async function NovaPropostaPage({
   const supabase = await createClient()
   const { cliente: clienteId } = await searchParams
 
-  const [{ data: templates }, clienteRes] = await Promise.all([
+  const [{ data: templates }, { data: contratantes }, clienteRes] = await Promise.all([
     supabase
       .from('proposal_templates')
       .select('id, nome, slug, descricao, escopo_padrao, contract_template_id, ativo, criado_em, atualizado_em')
       .eq('ativo', true)
       .order('nome'),
+    supabase.from('contractors').select('*').eq('ativo', true).order('razao_social'),
     clienteId
       ? supabase.from('clients').select('*').eq('id', clienteId).maybeSingle()
       : Promise.resolve({ data: null }),
@@ -30,6 +31,7 @@ export default async function NovaPropostaPage({
   return (
     <NovaPropostaForm
       templates={(templates ?? []) as ProposalTemplate[]}
+      contratantes={(contratantes ?? []) as Contractor[]}
       clientePre={(clienteRes.data ?? null) as Client | null}
     />
   )

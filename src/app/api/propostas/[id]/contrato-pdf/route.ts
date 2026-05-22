@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { Client, Parameters, Proposal, ContractTemplate, formatCurrency, formatDate } from '@/lib/db/types'
+import { Client, Contractor, Proposal, ContractTemplate, formatCurrency, formatDate } from '@/lib/db/types'
 import { gerarPdf } from '@/lib/docs/gerar-pdf'
 import { renderPlaceholders } from '@/lib/docs/render-placeholders'
 import { formatCnpj } from '@/lib/db/cnpj'
 
-export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -18,16 +18,18 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const proposta = prop as Proposal
 
-  const [{ data: cli }, { data: tpl }, { data: paramsRow }] = await Promise.all([
+  const [{ data: cli }, { data: tpl }, { data: ctr }] = await Promise.all([
     admin.from('clients').select('*').eq('id', proposta.client_id).maybeSingle(),
     admin.from('proposal_templates').select('contract_template_id').eq('id', proposta.proposal_template_id).maybeSingle(),
-    admin.from('parameters').select('*').eq('id', 1).maybeSingle(),
+    proposta.contractor_id
+      ? admin.from('contractors').select('*').eq('id', proposta.contractor_id).maybeSingle()
+      : Promise.resolve({ data: null }),
   ])
 
-  if (!cli || !tpl || !paramsRow) return new NextResponse('Dados incompletos', { status: 500 })
+  if (!cli || !tpl || !ctr) return new NextResponse('Dados incompletos', { status: 500 })
 
   const cliente = cli as Client
-  const par = paramsRow as Parameters
+  const contratante = ctr as Contractor
 
   const contractTemplateId = proposta.contract_template_id_override ?? (tpl as { contract_template_id: string }).contract_template_id
   const { data: ctplRow } = await admin
@@ -38,12 +40,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!ctplRow) return new NextResponse('Template de contrato não encontrado', { status: 500 })
 
   const contractTemplate = ctplRow as ContractTemplate
-
-  const contratante = {
-    razao_social: par.contratante_razao_social,
-    cnpj: par.contratante_cnpj,
-    endereco: par.contratante_endereco,
-  }
 
   const corpoRenderizado = renderPlaceholders(contractTemplate.corpo, {
     proposal: proposta,
@@ -73,7 +69,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     },
     contratante: {
       razao_social: contratante.razao_social,
-      cnpj: contratante.cnpj,
+      cnpj: formatCnpj(contratante.cnpj),
     },
     resumoComercial: [
       { label: 'Prazo', valor: `${proposta.prazo_meses} meses` },
@@ -82,7 +78,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       { label: 'Parcelas', valor: `${proposta.num_parcelas} × ${formatCurrency(Number(proposta.valor_parcela))}` },
       { label: 'Valor total', valor: formatCurrency(total) },
     ],
-    dataLocal: `Vila Velha, ES, ${formatDate(proposta.data_proposta)}`,
+    dataLocal: `${contratante.endereco}, ${formatDate(proposta.data_proposta)}`,
   })
 
   return new NextResponse(Buffer.from(pdfBytes), {
@@ -92,4 +88,3 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     },
   })
 }
-

@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { FormaAceite, StatusProposta, Client, Parameters, Proposal, ContractTemplate, EmailTemplate, formatCurrency, formatDate } from '@/lib/db/types'
+import { FormaAceite, StatusProposta, Client, Contractor, Parameters, Proposal, ContractTemplate, EmailTemplate, formatCurrency, formatDate } from '@/lib/db/types'
 import { formatCnpj } from '@/lib/db/cnpj'
 import { gerarPdf } from '@/lib/docs/gerar-pdf'
 import { renderPlaceholders } from '@/lib/docs/render-placeholders'
@@ -136,7 +136,7 @@ async function carregarPropostaCompleta(id: string) {
   const { data: prop } = await admin.from('proposals').select('*').eq('id', id).maybeSingle()
   if (!prop) return null
   const proposta = prop as Proposal
-  const [{ data: cli }, { data: par }, { data: tpl }] = await Promise.all([
+  const [{ data: cli }, { data: par }, { data: tpl }, { data: ctr }] = await Promise.all([
     admin.from('clients').select('*').eq('id', proposta.client_id).maybeSingle(),
     admin.from('parameters').select('*').eq('id', 1).maybeSingle(),
     admin
@@ -144,12 +144,16 @@ async function carregarPropostaCompleta(id: string) {
       .select('contract_template_id')
       .eq('id', proposta.proposal_template_id)
       .maybeSingle(),
+    proposta.contractor_id
+      ? admin.from('contractors').select('*').eq('id', proposta.contractor_id).maybeSingle()
+      : Promise.resolve({ data: null }),
   ])
-  if (!cli || !par || !tpl) return null
+  if (!cli || !par || !tpl || !ctr) return null
   return {
     proposta,
     cliente: cli as Client,
     parametros: par as Parameters,
+    contratante: ctr as Contractor,
     contractTemplateId: (proposta.contract_template_id_override ?? (tpl as { contract_template_id: string }).contract_template_id) as string,
   }
 }
@@ -171,7 +175,7 @@ export async function enviarProposta(id: string): Promise<Resultado> {
 
   const dados = await carregarPropostaCompleta(id)
   if (!dados) return { ok: false, erro: 'Proposta não encontrada.' }
-  const { proposta, cliente, parametros } = dados
+  const { proposta, cliente, contratante, parametros } = dados
 
   if (proposta.status !== 'aprovada') {
     return { ok: false, erro: 'A proposta precisa estar aprovada para envio.' }
@@ -183,9 +187,9 @@ export async function enviarProposta(id: string): Promise<Resultado> {
     proposal: proposta,
     cliente,
     contratante: {
-      razao_social: parametros.contratante_razao_social,
-      cnpj: parametros.contratante_cnpj,
-      endereco: parametros.contratante_endereco,
+      razao_social: contratante.razao_social,
+      cnpj: contratante.cnpj,
+      endereco: contratante.endereco,
     },
   })
   const pdf = await gerarPdf({
@@ -197,7 +201,7 @@ export async function enviarProposta(id: string): Promise<Resultado> {
       cnpj: formatCnpj(cliente.cnpj),
       endereco: corpoEnderecoCliente(cliente),
     },
-    contratante: { razao_social: parametros.contratante_razao_social, cnpj: parametros.contratante_cnpj },
+    contratante: { razao_social: contratante.razao_social, cnpj: contratante.cnpj },
     resumoComercial: [
       { label: 'Prazo', valor: `${proposta.prazo_meses} meses` },
       { label: 'Data de início', valor: formatDate(proposta.data_inicio_contrato) },
@@ -231,18 +235,18 @@ export async function enviarProposta(id: string): Promise<Resultado> {
     proposal: proposta,
     cliente,
     contratante: {
-      razao_social: parametros.contratante_razao_social,
-      cnpj: parametros.contratante_cnpj,
-      endereco: parametros.contratante_endereco,
+      razao_social: contratante.razao_social,
+      cnpj: contratante.cnpj,
+      endereco: contratante.endereco,
     },
   })
   const corpo = renderPlaceholders(tpl.corpo_html, {
     proposal: proposta,
     cliente,
     contratante: {
-      razao_social: parametros.contratante_razao_social,
-      cnpj: parametros.contratante_cnpj,
-      endereco: parametros.contratante_endereco,
+      razao_social: contratante.razao_social,
+      cnpj: contratante.cnpj,
+      endereco: contratante.endereco,
     },
   })
 
@@ -280,7 +284,7 @@ export async function enviarContratoParaAssinatura(id: string): Promise<Resultad
 
   const dados = await carregarPropostaCompleta(id)
   if (!dados) return { ok: false, erro: 'Proposta não encontrada.' }
-  const { proposta, cliente, parametros, contractTemplateId } = dados
+  const { proposta, cliente, contratante, parametros, contractTemplateId } = dados
 
   if (proposta.status !== 'fechada') {
     return { ok: false, erro: 'A proposta precisa estar fechada para gerar o contrato.' }
@@ -300,9 +304,9 @@ export async function enviarContratoParaAssinatura(id: string): Promise<Resultad
     proposal: proposta,
     cliente,
     contratante: {
-      razao_social: parametros.contratante_razao_social,
-      cnpj: parametros.contratante_cnpj,
-      endereco: parametros.contratante_endereco,
+      razao_social: contratante.razao_social,
+      cnpj: contratante.cnpj,
+      endereco: contratante.endereco,
     },
   })
   const total = Number(proposta.valor_adesao) + Number(proposta.valor_parcela) * proposta.num_parcelas
@@ -315,7 +319,7 @@ export async function enviarContratoParaAssinatura(id: string): Promise<Resultad
       cnpj: formatCnpj(cliente.cnpj),
       endereco: corpoEnderecoCliente(cliente),
     },
-    contratante: { razao_social: parametros.contratante_razao_social, cnpj: parametros.contratante_cnpj },
+    contratante: { razao_social: contratante.razao_social, cnpj: contratante.cnpj },
     resumoComercial: [
       { label: 'Prazo', valor: `${proposta.prazo_meses} meses` },
       { label: 'Data de início', valor: formatDate(proposta.data_inicio_contrato) },
