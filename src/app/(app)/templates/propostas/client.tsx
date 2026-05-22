@@ -12,6 +12,7 @@ import { Modal } from '@/components/Modal'
 import { Badge } from '@/components/Badge'
 import { PageHeader } from '@/components/PageHeader'
 import { UploadDocx } from '@/components/UploadDocx'
+import { RichEditor } from '@/components/RichEditor'
 
 interface Props {
   templates: ProposalTemplate[]
@@ -161,7 +162,16 @@ export function TemplatesPropostasClient({ templates, contratos }: Props) {
               </option>
             ))}
           </Select>
-          <UploadDocx onTextoExtraido={(texto) => setEscopo(texto)} />
+          <UploadDocx
+            onTextoExtraido={() => {}}
+            onHtmlExtraido={(html) => setEscopo(html)}
+          />
+          <RichEditor
+            label="Escopo padrão (opcional, formatável)"
+            value={escopo}
+            onChange={setEscopo}
+            minHeight={320}
+          />
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
             <input type="checkbox" checked={ativo} onChange={(e) => setAtivo(e.target.checked)} />
             <span style={{ fontSize: 14 }}>Ativo (disponível para operador)</span>

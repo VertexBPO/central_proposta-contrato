@@ -11,6 +11,7 @@ import { Modal } from '@/components/Modal'
 import { Badge } from '@/components/Badge'
 import { PageHeader } from '@/components/PageHeader'
 import { UploadDocx } from '@/components/UploadDocx'
+import { RichEditor } from '@/components/RichEditor'
 
 interface Props {
   templates: ContractTemplate[]
@@ -126,7 +127,16 @@ export function TemplatesContratosClient({ templates }: Props) {
             onChange={(e) => setSlug(slugify(e.target.value))}
             placeholder="contrato-bpo-financeiro"
           />
-          <UploadDocx onTextoExtraido={(texto) => setCorpo(texto)} />
+          <UploadDocx
+            onTextoExtraido={() => {}}
+            onHtmlExtraido={(html) => setCorpo(html)}
+          />
+          <RichEditor
+            label="Conteúdo do contrato (formatável)"
+            value={corpo}
+            onChange={setCorpo}
+            minHeight={360}
+          />
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
             <input type="checkbox" checked={ativo} onChange={(e) => setAtivo(e.target.checked)} />
             <span style={{ fontSize: 14 }}>Ativo (disponível para uso)</span>

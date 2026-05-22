@@ -5,9 +5,10 @@ import { Button } from './Button'
 
 interface Props {
   onTextoExtraido: (texto: string) => void
+  onHtmlExtraido?: (html: string) => void
 }
 
-export function UploadDocx({ onTextoExtraido }: Props) {
+export function UploadDocx({ onTextoExtraido, onHtmlExtraido }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [loading, setLoading] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
@@ -27,6 +28,7 @@ export function UploadDocx({ onTextoExtraido }: Props) {
         return
       }
       onTextoExtraido(data.texto)
+      if (onHtmlExtraido && data.html) onHtmlExtraido(data.html)
     } catch (e) {
       setErro(e instanceof Error ? e.message : 'Erro de rede.')
     } finally {

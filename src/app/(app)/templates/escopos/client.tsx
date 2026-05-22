@@ -11,6 +11,7 @@ import { Modal } from '@/components/Modal'
 import { Badge } from '@/components/Badge'
 import { PageHeader } from '@/components/PageHeader'
 import { UploadDocx } from '@/components/UploadDocx'
+import { RichEditor } from '@/components/RichEditor'
 
 interface Props {
   escopos: ScopeTemplate[]
@@ -131,9 +132,15 @@ export function TemplatesEscoposClient({ escopos }: Props) {
           />
           <UploadDocx
             onTextoExtraido={(texto) => {
-              setCorpo(texto)
               if (!nome.trim()) setNome(texto.split('\n')[0].slice(0, 80))
             }}
+            onHtmlExtraido={(html) => setCorpo(html)}
+          />
+          <RichEditor
+            label="Conteúdo do escopo (formatável)"
+            value={corpo}
+            onChange={setCorpo}
+            minHeight={360}
           />
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
             <input type="checkbox" checked={ativo} onChange={(e) => setAtivo(e.target.checked)} />
