@@ -4,12 +4,16 @@ import { randomUUID } from 'node:crypto'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { FormaAceite, StatusProposta, Client, Contractor, Parameters, Proposal, ContractTemplate, EmailTemplate, formatCurrency, formatDate } from '@/lib/db/types'
-import { formatCnpj, formatDocumento } from '@/lib/db/cnpj'
-import { gerarPdf } from '@/lib/docs/gerar-pdf'
-import { renderPlaceholders } from '@/lib/docs/render-placeholders'
+import { FormaAceite, StatusProposta, Client, Contractor, Parameters, Proposal, ContractTemplate, EmailTemplate } from '@/lib/db/types'
+import { preencherDocx } from '@/lib/docs/gerar-com-template'
+import { docxParaPdf } from '@/lib/cloudconvert/client'
+import { montarValores } from '@/lib/docs/valores-placeholders'
 import { enviarEmail } from '@/lib/email/resend'
 import { enviarParaAssinatura } from '@/lib/zapsign/client'
+
+function substituirPlaceholdersTexto(template: string, valores: Record<string, string>): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => valores[key] ?? `{{${key}}}`)
+}
 
 interface Resultado {
   ok: boolean
@@ -158,16 +162,6 @@ async function carregarPropostaCompleta(id: string) {
   }
 }
 
-function corpoEnderecoCliente(c: Client) {
-  return [
-    c.endereco_logradouro,
-    c.endereco_numero,
-    c.endereco_bairro,
-    c.endereco_cidade && c.endereco_uf ? `${c.endereco_cidade}/${c.endereco_uf}` : '',
-  ]
-    .filter(Boolean)
-    .join(', ')
-}
 
 export async function enviarProposta(id: string): Promise<Resultado> {
   const user = await getUserOrErr()
@@ -181,34 +175,26 @@ export async function enviarProposta(id: string): Promise<Resultado> {
     return { ok: false, erro: 'A proposta precisa estar aprovada para envio.' }
   }
 
-  // 1) Gerar PDF
-  const total = Number(proposta.valor_adesao) + Number(proposta.valor_parcela) * proposta.num_parcelas
-  const escopoRenderizado = renderPlaceholders(proposta.escopo_final, {
-    proposal: proposta,
-    cliente,
-    contratante,
-  })
-  const pdf = await gerarPdf({
-    titulo: `Proposta Comercial Nº ${proposta.numero}`,
-    numero: proposta.numero,
-    conteudo: escopoRenderizado,
-    cliente: {
-      razao_social: cliente.razao_social,
-      cnpj: formatCnpj(cliente.cnpj),
-      endereco: corpoEnderecoCliente(cliente),
-    },
-    contratante: { razao_social: contratante.razao_social, cnpj: formatDocumento(contratante.documento, contratante.tipo) },
-    resumoComercial: [
-      { label: 'Prazo', valor: `${proposta.prazo_meses} meses` },
-      { label: 'Data de início', valor: formatDate(proposta.data_inicio_contrato) },
-      { label: 'Valor de adesão', valor: formatCurrency(Number(proposta.valor_adesao)) },
-      { label: 'Parcelas', valor: `${proposta.num_parcelas} × ${formatCurrency(Number(proposta.valor_parcela))}` },
-      { label: 'Valor total', valor: formatCurrency(total) },
-    ],
-    dataLocal: `Vila Velha, ES, ${formatDate(proposta.data_proposta)}`,
-  })
-
+  // 1) Carrega template da proposta e gera PDF via docxtemplater + CloudConvert
   const admin = createAdminClient()
+  const { data: tpl } = await admin
+    .from('proposal_templates')
+    .select('template_file_path')
+    .eq('id', proposta.proposal_template_id)
+    .maybeSingle()
+  const templatePath = (tpl as { template_file_path: string | null } | null)?.template_file_path
+  if (!templatePath) {
+    return { ok: false, erro: 'Template de proposta sem arquivo .docx.' }
+  }
+
+  const valores = montarValores(proposta, cliente, contratante, proposta.escopo_final ?? '')
+  let pdf: Buffer
+  try {
+    const docx = await preencherDocx(templatePath, valores)
+    pdf = await docxParaPdf(docx, `proposta-${proposta.numero}.docx`)
+  } catch (e) {
+    return { ok: false, erro: `Falha ao gerar PDF: ${e instanceof Error ? e.message : 'erro'}` }
+  }
 
   // 2) Salva PDF no storage
   const path = `propostas/${proposta.id}/${proposta.numero}.pdf`
@@ -222,21 +208,13 @@ export async function enviarProposta(id: string): Promise<Resultado> {
     .eq('tipo', 'envio_proposta')
     .maybeSingle()
 
-  const tpl = (emTpl as EmailTemplate | null) ?? {
+  const emailTpl = (emTpl as EmailTemplate | null) ?? {
     assunto: `Sua proposta ${proposta.numero} — Vertex BPO`,
     corpo_html: `<p>Olá, ${cliente.responsavel_nome ?? cliente.razao_social}!</p><p>Segue em anexo a proposta {{numero}}.</p>`,
   }
 
-  const assunto = renderPlaceholders(tpl.assunto, {
-    proposal: proposta,
-    cliente,
-    contratante,
-  })
-  const corpo = renderPlaceholders(tpl.corpo_html, {
-    proposal: proposta,
-    cliente,
-    contratante,
-  })
+  const assunto = substituirPlaceholdersTexto(emailTpl.assunto, valores)
+  const corpo = substituirPlaceholdersTexto(emailTpl.corpo_html, valores)
 
   // 4) Envia (stub ou real)
   const envio = await enviarEmail({
@@ -286,33 +264,17 @@ export async function enviarContratoParaAssinatura(id: string): Promise<Resultad
     .maybeSingle()
   if (!ctplRow) return { ok: false, erro: 'Template de contrato não configurado.' }
   const ctpl = ctplRow as ContractTemplate
+  if (!ctpl.template_file_path) return { ok: false, erro: 'Template de contrato sem arquivo .docx.' }
 
-  // 1) Renderiza corpo + gera PDF
-  const corpoRenderizado = renderPlaceholders(ctpl.corpo, {
-    proposal: proposta,
-    cliente,
-    contratante,
-  })
-  const total = Number(proposta.valor_adesao) + Number(proposta.valor_parcela) * proposta.num_parcelas
-  const pdf = await gerarPdf({
-    titulo: `Contrato Nº ${proposta.numero}`,
-    numero: proposta.numero,
-    conteudo: corpoRenderizado,
-    cliente: {
-      razao_social: cliente.razao_social,
-      cnpj: formatCnpj(cliente.cnpj),
-      endereco: corpoEnderecoCliente(cliente),
-    },
-    contratante: { razao_social: contratante.razao_social, cnpj: formatDocumento(contratante.documento, contratante.tipo) },
-    resumoComercial: [
-      { label: 'Prazo', valor: `${proposta.prazo_meses} meses` },
-      { label: 'Data de início', valor: formatDate(proposta.data_inicio_contrato) },
-      { label: 'Valor de adesão', valor: formatCurrency(Number(proposta.valor_adesao)) },
-      { label: 'Parcelas', valor: `${proposta.num_parcelas} × ${formatCurrency(Number(proposta.valor_parcela))}` },
-      { label: 'Valor total', valor: formatCurrency(total) },
-    ],
-    dataLocal: `Vila Velha, ES, ${formatDate(new Date().toISOString().slice(0, 10))}`,
-  })
+  // Gera PDF via docxtemplater + CloudConvert
+  const valores = montarValores(proposta, cliente, contratante, proposta.escopo_final ?? '')
+  let pdf: Buffer
+  try {
+    const docx = await preencherDocx(ctpl.template_file_path, valores)
+    pdf = await docxParaPdf(docx, `contrato-${proposta.numero}.docx`)
+  } catch (e) {
+    return { ok: false, erro: `Falha ao gerar PDF do contrato: ${e instanceof Error ? e.message : 'erro'}` }
+  }
 
   // 2) Salva no Storage
   const path = `contratos/${proposta.id}/${proposta.numero}.pdf`

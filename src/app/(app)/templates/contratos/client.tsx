@@ -11,8 +11,6 @@ import { Modal } from '@/components/Modal'
 import { Badge } from '@/components/Badge'
 import { PageHeader } from '@/components/PageHeader'
 import { UploadDocx } from '@/components/UploadDocx'
-import { RichEditor } from '@/components/RichEditor'
-import { PreviewHtml } from '@/components/PreviewHtml'
 
 interface Props {
   templates: ContractTemplate[]
@@ -24,11 +22,11 @@ export function TemplatesContratosClient({ templates }: Props) {
   const [, startTransition] = useTransition()
 
   const [open, setOpen] = useState(false)
-  const [previewing, setPreviewing] = useState<ContractTemplate | null>(null)
   const [editing, setEditing] = useState<ContractTemplate | null>(null)
   const [nome, setNome] = useState('')
   const [slug, setSlug] = useState('')
-  const [corpo, setCorpo] = useState('')
+  const [filePath, setFilePath] = useState<string | null>(null)
+  const [fileName, setFileName] = useState<string | null>(null)
   const [ativo, setAtivo] = useState(true)
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
@@ -37,7 +35,8 @@ export function TemplatesContratosClient({ templates }: Props) {
     setEditing(null)
     setNome('')
     setSlug('')
-    setCorpo('')
+    setFilePath(null)
+    setFileName(null)
     setAtivo(true)
     setErro(null)
     setOpen(true)
@@ -47,27 +46,34 @@ export function TemplatesContratosClient({ templates }: Props) {
     setEditing(t)
     setNome(t.nome)
     setSlug(t.slug)
-    setCorpo(t.corpo)
+    setFilePath(t.template_file_path)
+    setFileName(t.template_file_path ? t.template_file_path.split('/').pop() ?? null : null)
     setAtivo(t.ativo)
     setErro(null)
     setOpen(true)
   }
 
-  function fechar() {
-    setOpen(false)
-  }
-
   async function salvar() {
     setErro(null)
-    if (!nome.trim() || !slug.trim() || !corpo.trim()) {
-      setErro('Preencha nome, slug e corpo do contrato.')
+    if (!nome.trim() || !slug.trim()) {
+      setErro('Preencha nome e slug.')
+      return
+    }
+    if (!filePath && !editing) {
+      setErro('Faça upload do arquivo .docx.')
       return
     }
     setSalvando(true)
-    const payload = { nome: nome.trim(), slug: slug.trim(), corpo, ativo }
+    const payload: Record<string, unknown> = {
+      nome: nome.trim(),
+      slug: slug.trim(),
+      ativo,
+    }
+    if (filePath) payload.template_file_path = filePath
+
     const { error } = editing
       ? await supabase.from('contract_templates').update(payload).eq('id', editing.id)
-      : await supabase.from('contract_templates').insert(payload)
+      : await supabase.from('contract_templates').insert({ ...payload, corpo: '' })
     setSalvando(false)
     if (error) {
       setErro(error.message)
@@ -77,11 +83,18 @@ export function TemplatesContratosClient({ templates }: Props) {
     startTransition(() => router.refresh())
   }
 
+  async function baixarTemplate(t: ContractTemplate) {
+    if (!t.template_file_path) return
+    const { data, error } = await supabase.storage.from('templates').createSignedUrl(t.template_file_path, 60)
+    if (error || !data) return
+    window.open(data.signedUrl, '_blank')
+  }
+
   return (
     <>
       <PageHeader
         title="Templates de contrato"
-        subtitle="Modelos cadastráveis com placeholders. Cada template de proposta vincula 1 contrato."
+        subtitle="Sobe o .docx pronto (com logo, formatação, placeholders) — sistema só substitui {{}} ao gerar"
         actions={<Button onClick={abrirNovo}>+ Novo contrato</Button>}
       />
 
@@ -100,11 +113,14 @@ export function TemplatesContratosClient({ templates }: Props) {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                     <h3 style={{ fontSize: 16, fontWeight: 600, color: '#0D1B3E' }}>{t.nome}</h3>
                     {!t.ativo && <Badge variant="neutral">Inativo</Badge>}
+                    {!t.template_file_path && <Badge variant="warning">Sem arquivo</Badge>}
                   </div>
                   <div style={{ fontSize: 12, color: '#8A9AB5', fontFamily: 'monospace' }}>{t.slug}</div>
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <Button variant="ghost" onClick={() => setPreviewing(t)}>Visualizar</Button>
+                  {t.template_file_path && (
+                    <Button variant="ghost" onClick={() => baixarTemplate(t)}>Baixar .docx</Button>
+                  )}
                   <Button variant="secondary" onClick={() => abrirEdicao(t)}>Editar</Button>
                 </div>
               </div>
@@ -113,14 +129,7 @@ export function TemplatesContratosClient({ templates }: Props) {
         </div>
       )}
 
-      <PreviewHtml
-        open={previewing !== null}
-        onClose={() => setPreviewing(null)}
-        titulo={previewing?.nome ?? ''}
-        html={previewing?.corpo ?? ''}
-      />
-
-      <Modal open={open} onClose={fechar} title={editing ? 'Editar contrato' : 'Novo contrato'} maxWidth={760}>
+      <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Editar contrato' : 'Novo contrato'} maxWidth={680}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <Input
             label="Nome"
@@ -129,23 +138,21 @@ export function TemplatesContratosClient({ templates }: Props) {
               setNome(e.target.value)
               if (!editing) setSlug(slugify(e.target.value))
             }}
-            placeholder="Contrato BPO Financeiro"
+            placeholder="Contrato Assessoria Empresarial"
           />
           <Input
             label="Slug"
             value={slug}
             onChange={(e) => setSlug(slugify(e.target.value))}
-            placeholder="contrato-bpo-financeiro"
+            placeholder="contrato-assessoria"
           />
           <UploadDocx
-            onTextoExtraido={() => {}}
-            onHtmlExtraido={(html) => setCorpo(html)}
-          />
-          <RichEditor
-            label="Conteúdo do contrato (formatável)"
-            value={corpo}
-            onChange={setCorpo}
-            minHeight={360}
+            pastaStorage="contract-templates"
+            arquivoAtual={fileName}
+            onArquivoSalvo={(path, nome) => {
+              setFilePath(path)
+              setFileName(nome)
+            }}
           />
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
             <input type="checkbox" checked={ativo} onChange={(e) => setAtivo(e.target.checked)} />
@@ -159,12 +166,8 @@ export function TemplatesContratosClient({ templates }: Props) {
           )}
 
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
-            <Button variant="ghost" onClick={fechar}>
-              Cancelar
-            </Button>
-            <Button onClick={salvar} loading={salvando}>
-              {editing ? 'Salvar alterações' : 'Criar contrato'}
-            </Button>
+            <Button variant="ghost" onClick={() => setOpen(false)}>Cancelar</Button>
+            <Button onClick={salvar} loading={salvando}>{editing ? 'Salvar' : 'Criar'}</Button>
           </div>
         </div>
       </Modal>

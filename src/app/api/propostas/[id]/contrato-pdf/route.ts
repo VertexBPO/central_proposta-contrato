@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { Client, Contractor, Proposal, ContractTemplate, formatCurrency, formatDate } from '@/lib/db/types'
-import { gerarPdf } from '@/lib/docs/gerar-pdf'
-import { renderPlaceholders } from '@/lib/docs/render-placeholders'
-import { formatCnpj, formatDocumento } from '@/lib/db/cnpj'
+import { Client, Contractor, Proposal, ContractTemplate } from '@/lib/db/types'
+import { preencherDocx } from '@/lib/docs/gerar-com-template'
+import { docxParaPdf } from '@/lib/cloudconvert/client'
+import { montarValores } from '@/lib/docs/valores-placeholders'
+
+export const runtime = 'nodejs'
+export const maxDuration = 60
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -15,23 +18,29 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const admin = createAdminClient()
   const { data: prop } = await admin.from('proposals').select('*').eq('id', id).maybeSingle()
   if (!prop) return new NextResponse('Not found', { status: 404 })
-
   const proposta = prop as Proposal
 
-  const [{ data: cli }, { data: tpl }, { data: ctr }] = await Promise.all([
+  const [{ data: cli }, { data: ctr }, { data: tpl }] = await Promise.all([
     admin.from('clients').select('*').eq('id', proposta.client_id).maybeSingle(),
-    admin.from('proposal_templates').select('contract_template_id').eq('id', proposta.proposal_template_id).maybeSingle(),
     proposta.contractor_id
       ? admin.from('contractors').select('*').eq('id', proposta.contractor_id).maybeSingle()
       : Promise.resolve({ data: null }),
+    admin
+      .from('proposal_templates')
+      .select('contract_template_id')
+      .eq('id', proposta.proposal_template_id)
+      .maybeSingle(),
   ])
 
-  if (!cli || !tpl || !ctr) return new NextResponse('Dados incompletos', { status: 500 })
+  if (!cli || !ctr || !tpl) return new NextResponse('Dados incompletos', { status: 500 })
 
   const cliente = cli as Client
   const contratante = ctr as Contractor
 
-  const contractTemplateId = proposta.contract_template_id_override ?? (tpl as { contract_template_id: string }).contract_template_id
+  const contractTemplateId =
+    proposta.contract_template_id_override ?? (tpl as { contract_template_id: string | null }).contract_template_id
+  if (!contractTemplateId) return new NextResponse('Sem template de contrato vinculado.', { status: 500 })
+
   const { data: ctplRow } = await admin
     .from('contract_templates')
     .select('*')
@@ -39,49 +48,34 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     .maybeSingle()
   if (!ctplRow) return new NextResponse('Template de contrato não encontrado', { status: 500 })
 
-  const contractTemplate = ctplRow as ContractTemplate
+  const contrato = ctplRow as ContractTemplate
+  if (!contrato.template_file_path) {
+    return new NextResponse('Template de contrato sem arquivo .docx.', { status: 500 })
+  }
 
-  const corpoRenderizado = renderPlaceholders(contractTemplate.corpo, {
-    proposal: proposta,
-    cliente,
-    contratante,
-  })
+  const valores = montarValores(proposta, cliente, contratante, proposta.escopo_final ?? '')
 
-  const total = Number(proposta.valor_adesao) + Number(proposta.valor_parcela) * proposta.num_parcelas
+  let docxPreenchido: Buffer
+  try {
+    docxPreenchido = await preencherDocx(contrato.template_file_path, valores)
+  } catch (e) {
+    return new NextResponse(
+      `Falha ao preencher contrato: ${e instanceof Error ? e.message : 'erro'}`,
+      { status: 500 }
+    )
+  }
 
-  const pdfBytes = await gerarPdf({
-    titulo: `Contrato Nº ${proposta.numero}`,
-    numero: proposta.numero,
-    conteudo: corpoRenderizado,
-    cliente: {
-      razao_social: cliente.razao_social,
-      cnpj: formatCnpj(cliente.cnpj),
-      endereco: [
-        cliente.endereco_logradouro,
-        cliente.endereco_numero,
-        cliente.endereco_bairro,
-        cliente.endereco_cidade && cliente.endereco_uf
-          ? `${cliente.endereco_cidade}/${cliente.endereco_uf}`
-          : '',
-      ]
-        .filter(Boolean)
-        .join(', '),
-    },
-    contratante: {
-      razao_social: contratante.razao_social,
-      cnpj: formatDocumento(contratante.documento, contratante.tipo),
-    },
-    resumoComercial: [
-      { label: 'Prazo', valor: `${proposta.prazo_meses} meses` },
-      { label: 'Data de início', valor: formatDate(proposta.data_inicio_contrato) },
-      { label: 'Valor de adesão', valor: formatCurrency(Number(proposta.valor_adesao)) },
-      { label: 'Parcelas', valor: `${proposta.num_parcelas} × ${formatCurrency(Number(proposta.valor_parcela))}` },
-      { label: 'Valor total', valor: formatCurrency(total) },
-    ],
-    dataLocal: `${contratante.endereco}, ${formatDate(proposta.data_proposta)}`,
-  })
+  let pdfBytes: Buffer
+  try {
+    pdfBytes = await docxParaPdf(docxPreenchido, `contrato-${proposta.numero}.docx`)
+  } catch (e) {
+    return new NextResponse(
+      `Falha ao converter PDF: ${e instanceof Error ? e.message : 'erro'}`,
+      { status: 500 }
+    )
+  }
 
-  return new NextResponse(Buffer.from(pdfBytes), {
+  return new NextResponse(new Uint8Array(pdfBytes), {
     headers: {
       'Content-Type': 'application/pdf',
       'Content-Disposition': `inline; filename="contrato-${proposta.numero}.pdf"`,

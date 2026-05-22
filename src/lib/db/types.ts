@@ -66,6 +66,7 @@ export interface ProposalTemplate {
   descricao: string | null
   escopo_padrao: string | null
   contract_template_id: string | null
+  template_file_path: string | null
   ativo: boolean
   criado_em: string
   atualizado_em: string
@@ -77,6 +78,7 @@ export interface ScopeTemplate {
   slug: string
   descricao: string | null
   corpo: string
+  template_file_path: string | null
   ativo: boolean
   criado_em: string
   atualizado_em: string
@@ -87,6 +89,7 @@ export interface ContractTemplate {
   nome: string
   slug: string
   corpo: string
+  template_file_path: string | null
   ativo: boolean
   criado_em: string
   atualizado_em: string

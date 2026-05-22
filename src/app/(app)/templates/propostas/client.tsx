@@ -12,8 +12,6 @@ import { Modal } from '@/components/Modal'
 import { Badge } from '@/components/Badge'
 import { PageHeader } from '@/components/PageHeader'
 import { UploadDocx } from '@/components/UploadDocx'
-import { RichEditor } from '@/components/RichEditor'
-import { PreviewHtml } from '@/components/PreviewHtml'
 
 interface Props {
   templates: ProposalTemplate[]
@@ -26,12 +24,12 @@ export function TemplatesPropostasClient({ templates, contratos }: Props) {
   const [, startTransition] = useTransition()
 
   const [open, setOpen] = useState(false)
-  const [previewing, setPreviewing] = useState<ProposalTemplate | null>(null)
   const [editing, setEditing] = useState<ProposalTemplate | null>(null)
   const [nome, setNome] = useState('')
   const [slug, setSlug] = useState('')
   const [descricao, setDescricao] = useState('')
-  const [escopo, setEscopo] = useState('')
+  const [filePath, setFilePath] = useState<string | null>(null)
+  const [fileName, setFileName] = useState<string | null>(null)
   const [contratoId, setContratoId] = useState('')
   const [ativo, setAtivo] = useState(true)
   const [salvando, setSalvando] = useState(false)
@@ -44,7 +42,8 @@ export function TemplatesPropostasClient({ templates, contratos }: Props) {
     setNome('')
     setSlug('')
     setDescricao('')
-    setEscopo('')
+    setFilePath(null)
+    setFileName(null)
     setContratoId(contratos[0]?.id ?? '')
     setAtivo(true)
     setErro(null)
@@ -56,7 +55,8 @@ export function TemplatesPropostasClient({ templates, contratos }: Props) {
     setNome(t.nome)
     setSlug(t.slug)
     setDescricao(t.descricao ?? '')
-    setEscopo(t.escopo_padrao ?? '')
+    setFilePath(t.template_file_path)
+    setFileName(t.template_file_path ? t.template_file_path.split('/').pop() ?? null : null)
     setContratoId(t.contract_template_id ?? '')
     setAtivo(t.ativo)
     setErro(null)
@@ -69,18 +69,23 @@ export function TemplatesPropostasClient({ templates, contratos }: Props) {
       setErro('Preencha nome e slug.')
       return
     }
+    if (!filePath && !editing) {
+      setErro('Faça upload do arquivo .docx.')
+      return
+    }
     setSalvando(true)
-    const payload = {
+    const payload: Record<string, unknown> = {
       nome: nome.trim(),
       slug: slug.trim(),
       descricao: descricao.trim() || null,
-      escopo_padrao: escopo || null,
       contract_template_id: contratoId || null,
       ativo,
     }
+    if (filePath) payload.template_file_path = filePath
+
     const { error } = editing
       ? await supabase.from('proposal_templates').update(payload).eq('id', editing.id)
-      : await supabase.from('proposal_templates').insert(payload)
+      : await supabase.from('proposal_templates').insert({ ...payload, escopo_padrao: null })
     setSalvando(false)
     if (error) {
       setErro(error.message)
@@ -90,14 +95,19 @@ export function TemplatesPropostasClient({ templates, contratos }: Props) {
     startTransition(() => router.refresh())
   }
 
+  async function baixarTemplate(t: ProposalTemplate) {
+    if (!t.template_file_path) return
+    const { data, error } = await supabase.storage.from('templates').createSignedUrl(t.template_file_path, 60)
+    if (error || !data) return
+    window.open(data.signedUrl, '_blank')
+  }
+
   return (
     <>
       <PageHeader
         title="Templates de proposta"
-        subtitle="Cadastre quantos quiser. Contrato vinculado é opcional."
-        actions={
-          <Button onClick={abrirNovo}>+ Nova proposta</Button>
-        }
+        subtitle="Sobe o .docx pronto com formatação e placeholders. Sistema só substitui {{}} ao gerar a proposta."
+        actions={<Button onClick={abrirNovo}>+ Nova proposta</Button>}
       />
 
       {templates.length === 0 ? (
@@ -113,6 +123,7 @@ export function TemplatesPropostasClient({ templates, contratos }: Props) {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                     <h3 style={{ fontSize: 16, fontWeight: 600, color: '#0D1B3E' }}>{t.nome}</h3>
                     {!t.ativo && <Badge variant="neutral">Inativo</Badge>}
+                    {!t.template_file_path && <Badge variant="warning">Sem arquivo</Badge>}
                   </div>
                   <div style={{ fontSize: 12, color: '#8A9AB5', fontFamily: 'monospace', marginBottom: 6 }}>{t.slug}</div>
                   {t.descricao && <p style={{ fontSize: 13, color: '#0D1B3E', marginBottom: 8 }}>{t.descricao}</p>}
@@ -121,7 +132,9 @@ export function TemplatesPropostasClient({ templates, contratos }: Props) {
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <Button variant="ghost" onClick={() => setPreviewing(t)}>Visualizar</Button>
+                  {t.template_file_path && (
+                    <Button variant="ghost" onClick={() => baixarTemplate(t)}>Baixar .docx</Button>
+                  )}
                   <Button variant="secondary" onClick={() => abrirEdicao(t)}>Editar</Button>
                 </div>
               </div>
@@ -130,14 +143,7 @@ export function TemplatesPropostasClient({ templates, contratos }: Props) {
         </div>
       )}
 
-      <PreviewHtml
-        open={previewing !== null}
-        onClose={() => setPreviewing(null)}
-        titulo={previewing?.nome ?? ''}
-        html={previewing?.escopo_padrao ?? ''}
-      />
-
-      <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Editar proposta' : 'Nova proposta'} maxWidth={760}>
+      <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Editar proposta' : 'Nova proposta'} maxWidth={680}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <Input
             label="Nome"
@@ -146,19 +152,13 @@ export function TemplatesPropostasClient({ templates, contratos }: Props) {
               setNome(e.target.value)
               if (!editing) setSlug(slugify(e.target.value))
             }}
-            placeholder="Proposta BPO Financeiro"
+            placeholder="Proposta Assessoria Empresarial"
           />
-          <Input
-            label="Slug"
-            value={slug}
-            onChange={(e) => setSlug(slugify(e.target.value))}
-            placeholder="proposta-bpo-financeiro"
-          />
+          <Input label="Slug" value={slug} onChange={(e) => setSlug(slugify(e.target.value))} />
           <Input
             label="Descrição (opcional)"
             value={descricao}
             onChange={(e) => setDescricao(e.target.value)}
-            placeholder="Descrição curta para identificar o uso"
           />
           <Select
             label="Template de contrato vinculado (opcional)"
@@ -167,20 +167,16 @@ export function TemplatesPropostasClient({ templates, contratos }: Props) {
           >
             <option value="">— sem contrato vinculado —</option>
             {contratos.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.nome}
-              </option>
+              <option key={c.id} value={c.id}>{c.nome}</option>
             ))}
           </Select>
           <UploadDocx
-            onTextoExtraido={() => {}}
-            onHtmlExtraido={(html) => setEscopo(html)}
-          />
-          <RichEditor
-            label="Escopo padrão (opcional, formatável)"
-            value={escopo}
-            onChange={setEscopo}
-            minHeight={320}
+            pastaStorage="proposal-templates"
+            arquivoAtual={fileName}
+            onArquivoSalvo={(path, nome) => {
+              setFilePath(path)
+              setFileName(nome)
+            }}
           />
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
             <input type="checkbox" checked={ativo} onChange={(e) => setAtivo(e.target.checked)} />
@@ -194,12 +190,8 @@ export function TemplatesPropostasClient({ templates, contratos }: Props) {
           )}
 
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
-            <Button variant="ghost" onClick={() => setOpen(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={salvar} loading={salvando}>
-              {editing ? 'Salvar' : 'Criar'}
-            </Button>
+            <Button variant="ghost" onClick={() => setOpen(false)}>Cancelar</Button>
+            <Button onClick={salvar} loading={salvando}>{editing ? 'Salvar' : 'Criar'}</Button>
           </div>
         </div>
       </Modal>

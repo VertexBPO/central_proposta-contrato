@@ -1,43 +1,54 @@
 'use client'
 
 import { useState, useRef } from 'react'
+import { createClient } from '@/lib/supabase/client'
 import { Button } from './Button'
 
 interface Props {
-  onTextoExtraido: (texto: string) => void
-  onHtmlExtraido?: (html: string) => void
+  onArquivoSalvo: (storagePath: string, nomeArquivo: string) => void
+  pastaStorage: 'proposal-templates' | 'contract-templates' | 'scope-templates'
+  arquivoAtual?: string | null
 }
 
-export function UploadDocx({ onTextoExtraido, onHtmlExtraido }: Props) {
+export function UploadDocx({ onArquivoSalvo, pastaStorage, arquivoAtual }: Props) {
+  const supabase = createClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [loading, setLoading] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
-  const [nomeArquivo, setNomeArquivo] = useState<string | null>(null)
+  const [nomeArquivo, setNomeArquivo] = useState<string | null>(arquivoAtual ?? null)
 
   async function handleArquivo(file: File) {
     setErro(null)
-    setNomeArquivo(file.name)
     setLoading(true)
     try {
-      const form = new FormData()
-      form.append('file', file)
-      const r = await fetch('/api/docx/extrair-texto', { method: 'POST', body: form })
-      const data = await r.json()
-      if (!r.ok) {
-        setErro(data.erro ?? 'Erro ao extrair texto.')
+      // Caminho único: pasta + uuid-like + nome
+      const ext = file.name.toLowerCase().endsWith('.docx') ? '.docx' : ''
+      if (!ext) {
+        setErro('Apenas arquivos .docx.')
         return
       }
-      onTextoExtraido(data.texto)
-      if (onHtmlExtraido && data.html) onHtmlExtraido(data.html)
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+      const path = `${pastaStorage}/${Date.now()}-${safeName}`
+
+      const { error: upErr } = await supabase.storage
+        .from('templates')
+        .upload(path, file, {
+          contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          upsert: false,
+        })
+
+      if (upErr) {
+        setErro(upErr.message)
+        return
+      }
+
+      setNomeArquivo(file.name)
+      onArquivoSalvo(path, file.name)
     } catch (e) {
       setErro(e instanceof Error ? e.message : 'Erro de rede.')
     } finally {
       setLoading(false)
     }
-  }
-
-  function onPick() {
-    fileInputRef.current?.click()
   }
 
   return (
@@ -62,8 +73,8 @@ export function UploadDocx({ onTextoExtraido, onHtmlExtraido }: Props) {
           if (f) handleArquivo(f)
         }}
       />
-      <Button type="button" variant="secondary" onClick={onPick} disabled={loading}>
-        {loading ? 'Processando…' : '📎 Upload .docx'}
+      <Button type="button" variant="secondary" onClick={() => fileInputRef.current?.click()} disabled={loading}>
+        {loading ? 'Enviando…' : nomeArquivo ? '📎 Substituir .docx' : '📎 Upload .docx'}
       </Button>
       <div style={{ flex: 1, minWidth: 0, fontSize: 12, color: '#8A9AB5' }}>
         {erro ? (
@@ -72,10 +83,10 @@ export function UploadDocx({ onTextoExtraido, onHtmlExtraido }: Props) {
           <>
             <span style={{ color: '#1B9E5C', fontWeight: 600 }}>✓</span>{' '}
             <strong style={{ color: '#0D1B3E' }}>{nomeArquivo}</strong>
-            {!loading && <span style={{ marginLeft: 8 }}>· pronto</span>}
+            {!loading && <span style={{ marginLeft: 8 }}>· salvo no template</span>}
           </>
         ) : (
-          <>Arquivo Word com `{`{`}placeholders{`}`}` já definidos. Edite o conteúdo no Word antes de subir.</>
+          <>Arquivo Word com <code>{`{{placeholders}}`}</code> já definidos. Tudo no Word — logo, marca d&apos;água, formatação. O sistema só substitui as variáveis.</>
         )}
       </div>
     </div>

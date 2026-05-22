@@ -51,17 +51,17 @@ export function PreviewHtml({ open, onClose, titulo, html }: Props) {
           color: #000;
         }
         .preview-html p {
-          margin: 6px 0;
+          margin: 0 0 12px 0;
           color: #000;
           font-weight: 300;
         }
         .preview-html ul,
         .preview-html ol {
           padding-left: 28px;
-          margin: 6px 0 10px;
+          margin: 0 0 12px;
         }
         .preview-html li {
-          margin: 4px 0;
+          margin: 0 0 8px;
           color: #000;
           font-weight: 300;
         }
