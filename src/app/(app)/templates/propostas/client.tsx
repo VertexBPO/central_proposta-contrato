@@ -53,7 +53,7 @@ export function TemplatesPropostasClient({ templates, contratos }: Props) {
     setNome(t.nome)
     setSlug(t.slug)
     setDescricao(t.descricao ?? '')
-    setEscopo(t.escopo_padrao)
+    setEscopo(t.escopo_padrao ?? '')
     setContratoId(t.contract_template_id)
     setAtivo(t.ativo)
     setErro(null)

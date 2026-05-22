@@ -18,6 +18,7 @@ interface NovaPropostaInput {
   contractor_id: string
   // proposta
   proposal_template_id: string
+  scope_template_id?: string | null
   escopo_tipo: EscopoTipo
   escopo_final: string
   // comercial
@@ -110,6 +111,7 @@ export async function criarProposta(input: NovaPropostaInput): Promise<Resultado
       client_id: clientId,
       contractor_id: input.contractor_id,
       proposal_template_id: input.proposal_template_id,
+      scope_template_id: input.scope_template_id ?? null,
       operador_id: user.id,
       status: 'rascunho',
       escopo_final: input.escopo_final,

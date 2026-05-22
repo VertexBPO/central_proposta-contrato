@@ -4,8 +4,7 @@ import { useActionState, useState } from 'react'
 import { Card } from '@/components/Card'
 import { Input } from '@/components/Input'
 import { Button } from '@/components/Button'
-import { Textarea } from '@/components/Textarea'
-import { formatCnpj } from '@/lib/db/cnpj'
+import { formatCnpj, onlyDigits, validateCnpj } from '@/lib/db/cnpj'
 import { salvarDadosCliente } from './actions'
 import type { PropostaCliente } from '@/lib/cliente/sessao'
 
@@ -17,6 +16,48 @@ interface Props {
 export function PreencherForm({ cliente, numero }: Props) {
   const [state, action, pending] = useActionState(salvarDadosCliente, undefined)
   const [cnpj, setCnpj] = useState(cliente.cnpj ? formatCnpj(cliente.cnpj) : '')
+  const [razaoSocial, setRazaoSocial] = useState(cliente.razao_social ?? '')
+  const [logradouro, setLogradouro] = useState(cliente.endereco_logradouro ?? '')
+  const [numeroEnd, setNumeroEnd] = useState(cliente.endereco_numero ?? '')
+  const [complemento, setComplemento] = useState(cliente.endereco_complemento ?? '')
+  const [bairro, setBairro] = useState(cliente.endereco_bairro ?? '')
+  const [cidade, setCidade] = useState(cliente.endereco_cidade ?? '')
+  const [uf, setUf] = useState(cliente.endereco_uf ?? '')
+  const [cep, setCep] = useState(cliente.endereco_cep ?? '')
+  const [telefone, setTelefone] = useState(cliente.telefone ?? '')
+  const [buscando, setBuscando] = useState(false)
+  const [avisoCnpj, setAvisoCnpj] = useState<string | null>(null)
+
+  async function buscarCnpj() {
+    const nums = onlyDigits(cnpj)
+    if (!validateCnpj(nums)) {
+      setAvisoCnpj('CNPJ inválido')
+      return
+    }
+    setAvisoCnpj(null)
+    setBuscando(true)
+    try {
+      const r = await fetch(`/api/cnpj/${nums}`)
+      const data = await r.json()
+      if (!r.ok) {
+        setAvisoCnpj(data.erro ?? 'Erro na consulta')
+        return
+      }
+      if (!razaoSocial && data.razao_social) setRazaoSocial(data.razao_social)
+      if (!logradouro && data.endereco_logradouro) setLogradouro(data.endereco_logradouro)
+      if (!numeroEnd && data.endereco_numero) setNumeroEnd(data.endereco_numero)
+      if (!complemento && data.endereco_complemento) setComplemento(data.endereco_complemento)
+      if (!bairro && data.endereco_bairro) setBairro(data.endereco_bairro)
+      if (!cidade && data.endereco_cidade) setCidade(data.endereco_cidade)
+      if (!uf && data.endereco_uf) setUf(data.endereco_uf)
+      if (!cep && data.endereco_cep) setCep(data.endereco_cep)
+      if (!telefone && data.telefone) setTelefone(data.telefone)
+    } catch {
+      setAvisoCnpj('Erro de rede ao consultar CNPJ')
+    } finally {
+      setBuscando(false)
+    }
+  }
 
   return (
     <div
@@ -43,21 +84,33 @@ export function PreencherForm({ cliente, numero }: Props) {
           </p>
 
           <form action={action} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div>
+              <Input
+                name="cnpj"
+                label="CNPJ * (digite e clique Buscar)"
+                value={cnpj}
+                onChange={(e) => setCnpj(formatCnpj(e.target.value))}
+                onBlur={() => {
+                  if (validateCnpj(onlyDigits(cnpj)) && !razaoSocial) buscarCnpj()
+                }}
+                required
+                placeholder="00.000.000/0000-00"
+                inputMode="numeric"
+              />
+              <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Button type="button" variant="ghost" onClick={buscarCnpj} disabled={buscando}>
+                  {buscando ? 'Buscando…' : 'Buscar dados na Receita'}
+                </Button>
+                {avisoCnpj && <span style={{ fontSize: 12, color: '#D64545' }}>{avisoCnpj}</span>}
+              </div>
+            </div>
             <Input
               name="razao_social"
               label="Razão social *"
-              defaultValue={cliente.razao_social ?? ''}
+              value={razaoSocial}
+              onChange={(e) => setRazaoSocial(e.target.value)}
               required
               placeholder="Empresa LTDA"
-            />
-            <Input
-              name="cnpj"
-              label="CNPJ *"
-              value={cnpj}
-              onChange={(e) => setCnpj(formatCnpj(e.target.value))}
-              required
-              placeholder="00.000.000/0000-00"
-              inputMode="numeric"
             />
             <Input
               name="responsavel_nome"
@@ -76,7 +129,8 @@ export function PreencherForm({ cliente, numero }: Props) {
             <Input
               name="telefone"
               label="Telefone"
-              defaultValue={cliente.telefone ?? ''}
+              value={telefone}
+              onChange={(e) => setTelefone(e.target.value)}
               placeholder="(00) 00000-0000"
             />
 
@@ -89,31 +143,36 @@ export function PreencherForm({ cliente, numero }: Props) {
               <Input
                 name="endereco_logradouro"
                 label="Logradouro"
-                defaultValue={cliente.endereco_logradouro ?? ''}
+                value={logradouro}
+                onChange={(e) => setLogradouro(e.target.value)}
                 placeholder="Rua / Av."
               />
               <Input
                 name="endereco_numero"
                 label="Número"
-                defaultValue={cliente.endereco_numero ?? ''}
+                value={numeroEnd}
+                onChange={(e) => setNumeroEnd(e.target.value)}
               />
             </div>
             <Input
               name="endereco_complemento"
               label="Complemento"
-              defaultValue={cliente.endereco_complemento ?? ''}
+              value={complemento}
+              onChange={(e) => setComplemento(e.target.value)}
               placeholder="Sala / andar"
             />
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <Input
                 name="endereco_bairro"
                 label="Bairro"
-                defaultValue={cliente.endereco_bairro ?? ''}
+                value={bairro}
+                onChange={(e) => setBairro(e.target.value)}
               />
               <Input
                 name="endereco_cep"
                 label="CEP"
-                defaultValue={cliente.endereco_cep ?? ''}
+                value={cep}
+                onChange={(e) => setCep(e.target.value)}
                 placeholder="00000-000"
               />
             </div>
@@ -121,12 +180,14 @@ export function PreencherForm({ cliente, numero }: Props) {
               <Input
                 name="endereco_cidade"
                 label="Cidade"
-                defaultValue={cliente.endereco_cidade ?? ''}
+                value={cidade}
+                onChange={(e) => setCidade(e.target.value)}
               />
               <Input
                 name="endereco_uf"
                 label="UF"
-                defaultValue={cliente.endereco_uf ?? ''}
+                value={uf}
+                onChange={(e) => setUf(e.target.value.toUpperCase())}
                 maxLength={2}
                 placeholder="ES"
               />

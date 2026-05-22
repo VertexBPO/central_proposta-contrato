@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 
-const ROTAS_PUBLICAS = ['/login', '/esqueci-senha', '/redefinir-senha']
+const ROTAS_PUBLICAS = ['/login', '/esqueci-senha', '/redefinir-senha', '/api/cnpj']
 const ROTAS_CLIENTE = ['/c']
 
 export async function proxy(request: NextRequest) {

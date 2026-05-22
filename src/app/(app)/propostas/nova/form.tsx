@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Client, Contractor, ProposalTemplate, EscopoTipo, formatCurrency } from '@/lib/db/types'
+import { Client, Contractor, ProposalTemplate, ScopeTemplate, EscopoTipo, formatCurrency } from '@/lib/db/types'
 import { formatCnpj, onlyDigits } from '@/lib/db/cnpj'
 import { Card } from '@/components/Card'
 import { Input } from '@/components/Input'
@@ -14,6 +14,7 @@ import { criarProposta } from './actions'
 
 interface Props {
   templates: ProposalTemplate[]
+  escopos: ScopeTemplate[]
   contratantes: Contractor[]
   clientePre: Client | null
 }
@@ -27,7 +28,7 @@ function inputMoneyFormat(n: number): string {
   return n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
-export function NovaPropostaForm({ templates, contratantes, clientePre }: Props) {
+export function NovaPropostaForm({ templates, escopos, contratantes, clientePre }: Props) {
   const router = useRouter()
 
   // Cliente
@@ -41,8 +42,9 @@ export function NovaPropostaForm({ templates, contratantes, clientePre }: Props)
 
   // Proposta
   const [templateId, setTemplateId] = useState(templates[0]?.id ?? '')
+  const [scopeId, setScopeId] = useState<string>('')
   const [escopoTipo, setEscopoTipo] = useState<EscopoTipo>('padrao')
-  const [escopo, setEscopo] = useState(templates[0]?.escopo_padrao ?? '')
+  const [escopo, setEscopo] = useState(escopos[0]?.corpo ?? '')
 
   // Comercial
   const [prazo, setPrazo] = useState(5)
@@ -67,21 +69,24 @@ export function NovaPropostaForm({ templates, contratantes, clientePre }: Props)
 
   function aoTrocarTemplate(id: string) {
     setTemplateId(id)
-    const t = templates.find((x) => x.id === id)
-    if (t && escopoTipo === 'padrao') {
-      setEscopo(t.escopo_padrao)
+  }
+
+  function aoTrocarEscopo(id: string) {
+    setScopeId(id)
+    const s = escopos.find((x) => x.id === id)
+    if (s && escopoTipo === 'padrao') {
+      setEscopo(s.corpo)
     }
   }
 
   function aoTrocarTipo(tipo: EscopoTipo) {
     setEscopoTipo(tipo)
-    if (tipo === 'padrao') {
-      const t = templates.find((x) => x.id === templateId)
-      if (t) setEscopo(t.escopo_padrao)
+    if (tipo === 'padrao' && scopeId) {
+      const s = escopos.find((x) => x.id === scopeId)
+      if (s) setEscopo(s.corpo)
     } else if (tipo === 'personalizado') {
       setEscopo('')
     }
-    // editado mantém o que está
   }
 
   async function submeter() {
@@ -115,6 +120,7 @@ export function NovaPropostaForm({ templates, contratantes, clientePre }: Props)
       email_cliente: emailCliente,
       contractor_id: contractorId,
       proposal_template_id: templateId,
+      scope_template_id: scopeId || null,
       escopo_tipo: escopoTipo,
       escopo_final: escopo,
       prazo_meses: prazo,
@@ -221,12 +227,19 @@ export function NovaPropostaForm({ templates, contratantes, clientePre }: Props)
                 <option key={c.id} value={c.id}>{c.razao_social}</option>
               ))}
             </Select>
-            <Select label="Template" value={templateId} onChange={(e) => aoTrocarTemplate(e.target.value)}>
+            <Select label="Template do documento" value={templateId} onChange={(e) => aoTrocarTemplate(e.target.value)}>
               {templates.length === 0 && <option value="">— sem templates cadastrados —</option>}
               {templates.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.nome}
                 </option>
+              ))}
+            </Select>
+
+            <Select label="Escopo (biblioteca por modalidade)" value={scopeId} onChange={(e) => aoTrocarEscopo(e.target.value)}>
+              <option value="">— escolha um escopo —</option>
+              {escopos.map((s) => (
+                <option key={s.id} value={s.id}>{s.nome}</option>
               ))}
             </Select>
 

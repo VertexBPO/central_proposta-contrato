@@ -64,8 +64,19 @@ export interface ProposalTemplate {
   nome: string
   slug: string
   descricao: string | null
-  escopo_padrao: string
+  escopo_padrao: string | null
   contract_template_id: string
+  ativo: boolean
+  criado_em: string
+  atualizado_em: string
+}
+
+export interface ScopeTemplate {
+  id: string
+  nome: string
+  slug: string
+  descricao: string | null
+  corpo: string
   ativo: boolean
   criado_em: string
   atualizado_em: string
@@ -96,6 +107,7 @@ export interface Proposal {
   contractor_id: string | null
   proposal_template_id: string
   contract_template_id_override: string | null
+  scope_template_id: string | null
   operador_id: string
   aprovador_id: string | null
   status: StatusProposta
