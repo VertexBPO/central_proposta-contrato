@@ -65,7 +65,7 @@ export interface ProposalTemplate {
   slug: string
   descricao: string | null
   escopo_padrao: string | null
-  contract_template_id: string
+  contract_template_id: string | null
   ativo: boolean
   criado_em: string
   atualizado_em: string

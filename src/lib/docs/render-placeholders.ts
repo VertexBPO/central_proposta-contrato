@@ -18,6 +18,12 @@ function dataPorExtenso(iso: string): string {
   return `${d.getDate()} de ${MESES[d.getMonth()]} de ${d.getFullYear()}`
 }
 
+function calcularDataFim(dataInicioIso: string, meses: number): string {
+  const d = new Date(dataInicioIso + 'T12:00:00')
+  d.setMonth(d.getMonth() + meses)
+  return d.toISOString().slice(0, 10)
+}
+
 function valorPorExtenso(valor: number): string {
   try {
     return extenso(valor.toFixed(2), { mode: 'currency', currency: { type: 'BRL' } })
@@ -85,6 +91,9 @@ export function renderPlaceholders(template: string, ctx: PlaceholderContext): s
     data_atual_extenso: dataPorExtenso(ctx.proposal.data_proposta),
     data_inicio: formatDate(ctx.proposal.data_inicio_contrato),
     data_inicio_extenso: dataPorExtenso(ctx.proposal.data_inicio_contrato),
+    data_fim: formatDate(calcularDataFim(ctx.proposal.data_inicio_contrato, ctx.proposal.prazo_meses)),
+    data_fim_extenso: dataPorExtenso(calcularDataFim(ctx.proposal.data_inicio_contrato, ctx.proposal.prazo_meses)),
+    data_termino: formatDate(calcularDataFim(ctx.proposal.data_inicio_contrato, ctx.proposal.prazo_meses)),
 
     // Ano da proposta + ano subsequente
     ano_atual: String(anoAtual),

@@ -54,7 +54,7 @@ export function TemplatesPropostasClient({ templates, contratos }: Props) {
     setSlug(t.slug)
     setDescricao(t.descricao ?? '')
     setEscopo(t.escopo_padrao ?? '')
-    setContratoId(t.contract_template_id)
+    setContratoId(t.contract_template_id ?? '')
     setAtivo(t.ativo)
     setErro(null)
     setOpen(true)
@@ -62,8 +62,8 @@ export function TemplatesPropostasClient({ templates, contratos }: Props) {
 
   async function salvar() {
     setErro(null)
-    if (!nome.trim() || !slug.trim() || !escopo.trim() || !contratoId) {
-      setErro('Preencha nome, slug, escopo e contrato vinculado.')
+    if (!nome.trim() || !slug.trim()) {
+      setErro('Preencha nome e slug.')
       return
     }
     setSalvando(true)
@@ -71,8 +71,8 @@ export function TemplatesPropostasClient({ templates, contratos }: Props) {
       nome: nome.trim(),
       slug: slug.trim(),
       descricao: descricao.trim() || null,
-      escopo_padrao: escopo,
-      contract_template_id: contratoId,
+      escopo_padrao: escopo || null,
+      contract_template_id: contratoId || null,
       ativo,
     }
     const { error } = editing
@@ -91,21 +91,11 @@ export function TemplatesPropostasClient({ templates, contratos }: Props) {
     <>
       <PageHeader
         title="Templates de proposta"
-        subtitle="Cadastre quantos quiser. Cada um precisa estar vinculado a um template de contrato."
+        subtitle="Cadastre quantos quiser. Contrato vinculado é opcional."
         actions={
-          <Button onClick={abrirNovo} disabled={contratos.length === 0}>
-            + Nova proposta
-          </Button>
+          <Button onClick={abrirNovo}>+ Nova proposta</Button>
         }
       />
-
-      {contratos.length === 0 && (
-        <Card style={{ marginBottom: 16, background: '#FCF1DC', borderColor: '#E8A93C' }}>
-          <p style={{ color: '#A87519', fontSize: 14 }}>
-            Cadastre primeiro pelo menos um <strong>template de contrato</strong> para poder criar templates de proposta.
-          </p>
-        </Card>
-      )}
 
       {templates.length === 0 ? (
         <Card>
@@ -124,7 +114,7 @@ export function TemplatesPropostasClient({ templates, contratos }: Props) {
                   <div style={{ fontSize: 12, color: '#8A9AB5', fontFamily: 'monospace', marginBottom: 6 }}>{t.slug}</div>
                   {t.descricao && <p style={{ fontSize: 13, color: '#0D1B3E', marginBottom: 8 }}>{t.descricao}</p>}
                   <div style={{ fontSize: 12, color: '#8A9AB5' }}>
-                    Contrato vinculado: <strong style={{ color: '#0D1B3E' }}>{contratoMap.get(t.contract_template_id) ?? '—'}</strong>
+                    Contrato vinculado: <strong style={{ color: '#0D1B3E' }}>{t.contract_template_id ? (contratoMap.get(t.contract_template_id) ?? '—') : '—'}</strong>
                   </div>
                 </div>
                 <Button variant="secondary" onClick={() => abrirEdicao(t)}>
@@ -160,11 +150,11 @@ export function TemplatesPropostasClient({ templates, contratos }: Props) {
             placeholder="Descrição curta para identificar o uso"
           />
           <Select
-            label="Template de contrato vinculado"
+            label="Template de contrato vinculado (opcional)"
             value={contratoId}
             onChange={(e) => setContratoId(e.target.value)}
           >
-            {contratos.length === 0 && <option value="">— sem opções —</option>}
+            <option value="">— sem contrato vinculado —</option>
             {contratos.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.nome}
