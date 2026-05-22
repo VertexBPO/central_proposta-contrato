@@ -327,3 +327,35 @@ export async function gerarMagicLink(id: string): Promise<Resultado> {
     magic_link: `${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'}/c/${token}`,
   }
 }
+
+export async function deletarProposta(id: string): Promise<Resultado> {
+  const user = await getUserOrErr()
+  if (!user) return { ok: false, erro: 'Sessão inválida.' }
+  if (user.papel !== 'admin') return { ok: false, erro: 'Apenas admin pode deletar propostas.' }
+
+  const admin = createAdminClient()
+
+  // Pega PDF cacheado pra limpar do Storage depois
+  const { data: prop } = await admin
+    .from('proposals')
+    .select('pdf_storage_path, numero')
+    .eq('id', id)
+    .maybeSingle()
+  if (!prop) return { ok: false, erro: 'Proposta não encontrada.' }
+
+  const { error } = await admin.from('proposals').delete().eq('id', id)
+  if (error) {
+    if (error.code === '23503') {
+      return { ok: false, erro: 'Proposta tem contrato gerado vinculado. Cancele o contrato antes de apagar.' }
+    }
+    return { ok: false, erro: error.message }
+  }
+
+  // Limpa PDF cacheado (best-effort, não bloqueia se falhar)
+  if (prop.pdf_storage_path) {
+    await admin.storage.from('documentos').remove([prop.pdf_storage_path])
+  }
+
+  revalidatePath('/dashboard')
+  return { ok: true }
+}

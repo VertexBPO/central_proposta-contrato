@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/Button'
 import { Modal } from '@/components/Modal'
 import { Textarea } from '@/components/Textarea'
-import { gerarMagicLink, marcarPerdida } from '@/app/(app)/propostas/[id]/actions'
+import { gerarMagicLink, marcarPerdida, deletarProposta } from '@/app/(app)/propostas/[id]/actions'
 import { StatusProposta } from '@/lib/db/types'
 
 type ModalType = 'magic' | 'perdida' | null
@@ -22,15 +22,18 @@ const STATUS_PERMITE_PERDER: StatusProposta[] = [
 
 interface Props {
   id: string
+  numero: string
   status: StatusProposta
+  isAdmin: boolean
 }
 
-export function AcoesRapidas({ id, status }: Props) {
+export function AcoesRapidas({ id, numero, status, isAdmin }: Props) {
   const router = useRouter()
   const [, startTransition] = useTransition()
   const [modal, setModal] = useState<ModalType>(null)
   const [motivo, setMotivo] = useState('')
   const [loading, setLoading] = useState(false)
+  const [apagando, setApagando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
   const [link, setLink] = useState<string | null>(null)
 
@@ -70,6 +73,21 @@ export function AcoesRapidas({ id, status }: Props) {
       return
     }
     setModal(null)
+    startTransition(() => router.refresh())
+  }
+
+  async function executarApagar() {
+    const ok = window.confirm(
+      `Apagar a proposta ${numero}?\n\nIsso é permanente e remove o registro, o PDF cacheado e todos os logs de auditoria. Se houver contrato gerado vinculado, o banco vai bloquear.`
+    )
+    if (!ok) return
+    setApagando(true)
+    const r = await deletarProposta(id)
+    setApagando(false)
+    if (!r.ok) {
+      window.alert(r.erro ?? 'Erro ao apagar proposta.')
+      return
+    }
     startTransition(() => router.refresh())
   }
 
@@ -135,6 +153,31 @@ export function AcoesRapidas({ id, status }: Props) {
           }}
         >
           ❌ Perdida
+        </button>
+      )}
+      {isAdmin && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            executarApagar()
+          }}
+          disabled={apagando}
+          style={{
+            padding: '6px 10px',
+            background: 'transparent',
+            color: '#D64545',
+            borderRadius: 6,
+            fontSize: 12,
+            fontWeight: 600,
+            border: '1px solid #D64545',
+            cursor: apagando ? 'wait' : 'pointer',
+            whiteSpace: 'nowrap',
+            opacity: apagando ? 0.6 : 1,
+          }}
+        >
+          🗑️ {apagando ? 'Apagando…' : 'Apagar'}
         </button>
       )}
 

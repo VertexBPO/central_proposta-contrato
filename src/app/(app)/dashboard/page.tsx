@@ -36,6 +36,13 @@ export default async function DashboardPage({
   const supabase = await createClient()
   const { status: statusFiltro } = await searchParams
 
+  const { data: { user } } = await supabase.auth.getUser()
+  let isAdmin = false
+  if (user) {
+    const { data: me } = await supabase.from('users').select('papel').eq('id', user.id).maybeSingle()
+    isAdmin = me?.papel === 'admin'
+  }
+
   // Counts em paralelo
   const counts = await Promise.all(
     CARDS.map(async (c) => {
@@ -172,7 +179,7 @@ export default async function DashboardPage({
                     </div>
                     <div>{formatDate(p.data_proposta)}</div>
                   </div>
-                  <AcoesRapidas id={p.id} status={p.status} />
+                  <AcoesRapidas id={p.id} numero={p.numero} status={p.status} isAdmin={isAdmin} />
                 </div>
               )
             })}
