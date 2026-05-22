@@ -11,6 +11,7 @@ import { Textarea } from '@/components/Textarea'
 import { Modal } from '@/components/Modal'
 import { Badge } from '@/components/Badge'
 import { PageHeader } from '@/components/PageHeader'
+import { UploadDocx } from '@/components/UploadDocx'
 
 interface Props {
   escopos: ScopeTemplate[]
@@ -128,6 +129,12 @@ export function TemplatesEscoposClient({ escopos }: Props) {
             value={descricao}
             onChange={(e) => setDescricao(e.target.value)}
             placeholder="Para clientes que precisam estruturar o financeiro do zero"
+          />
+          <UploadDocx
+            onTextoExtraido={(texto) => {
+              setCorpo(texto)
+              if (!nome.trim()) setNome(texto.split('\n')[0].slice(0, 80))
+            }}
           />
           <Textarea
             label="Corpo do escopo"

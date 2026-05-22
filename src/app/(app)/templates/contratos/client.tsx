@@ -11,6 +11,7 @@ import { Textarea } from '@/components/Textarea'
 import { Modal } from '@/components/Modal'
 import { Badge } from '@/components/Badge'
 import { PageHeader } from '@/components/PageHeader'
+import { UploadDocx } from '@/components/UploadDocx'
 
 interface Props {
   templates: ContractTemplate[]
@@ -126,6 +127,7 @@ export function TemplatesContratosClient({ templates }: Props) {
             onChange={(e) => setSlug(slugify(e.target.value))}
             placeholder="contrato-bpo-financeiro"
           />
+          <UploadDocx onTextoExtraido={(texto) => setCorpo(texto)} />
           <Textarea
             label="Corpo do contrato (com placeholders)"
             value={corpo}

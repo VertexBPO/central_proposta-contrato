@@ -12,6 +12,7 @@ import { Select } from '@/components/Select'
 import { Modal } from '@/components/Modal'
 import { Badge } from '@/components/Badge'
 import { PageHeader } from '@/components/PageHeader'
+import { UploadDocx } from '@/components/UploadDocx'
 
 interface Props {
   templates: ProposalTemplate[]
@@ -171,8 +172,9 @@ export function TemplatesPropostasClient({ templates, contratos }: Props) {
               </option>
             ))}
           </Select>
+          <UploadDocx onTextoExtraido={(texto) => setEscopo(texto)} />
           <Textarea
-            label="Escopo padrão (com placeholders)"
+            label="Escopo padrão (opcional, com placeholders)"
             value={escopo}
             onChange={(e) => setEscopo(e.target.value)}
             placeholder="Use {{razao_social}}, {{cnpj}}, {{prazo_meses}}, etc."
