@@ -7,6 +7,7 @@ import { Button } from '@/components/Button'
 import { Client, Proposal, StatusProposta, formatCurrency, formatDate } from '@/lib/db/types'
 import { STATUS_LABEL, STATUS_VARIANT } from '@/lib/db/status'
 import { formatCnpj } from '@/lib/db/cnpj'
+import { AcoesRapidas } from './acoes-rapidas'
 
 export const dynamic = 'force-dynamic'
 
@@ -132,21 +133,29 @@ export default async function DashboardPage({
             {propostas.map((p) => {
               const total = Number(p.valor_adesao) + Number(p.valor_parcela) * p.num_parcelas
               return (
-                <Link
+                <div
                   key={p.id}
-                  href={`/propostas/${p.id}`}
                   style={{
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
                     padding: '12px 0',
                     borderBottom: '1px solid #E5EAF2',
-                    textDecoration: 'none',
                     gap: 16,
                   }}
                 >
-                  <div style={{ minWidth: 0, flex: 1, display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <span style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 600, width: 110 }}>
+                  <Link
+                    href={`/propostas/${p.id}`}
+                    style={{
+                      minWidth: 0,
+                      flex: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 12,
+                      textDecoration: 'none',
+                    }}
+                  >
+                    <span style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 600, width: 110, color: '#0D1B3E' }}>
                       {p.numero}
                     </span>
                     <Badge variant={STATUS_VARIANT[p.status]}>{STATUS_LABEL[p.status]}</Badge>
@@ -156,14 +165,15 @@ export default async function DashboardPage({
                         — {formatCnpj(p.clients?.cnpj ?? '')}
                       </span>
                     </span>
-                  </div>
-                  <div style={{ textAlign: 'right', fontSize: 12, color: '#8A9AB5' }}>
+                  </Link>
+                  <div style={{ textAlign: 'right', fontSize: 12, color: '#8A9AB5', minWidth: 120 }}>
                     <div style={{ fontSize: 14, fontWeight: 600, color: '#0D1B3E' }}>
                       {formatCurrency(total)}
                     </div>
                     <div>{formatDate(p.data_proposta)}</div>
                   </div>
-                </Link>
+                  <AcoesRapidas id={p.id} status={p.status} />
+                </div>
               )
             })}
           </div>

@@ -13,9 +13,7 @@ import {
   devolverProposta,
   rejeitarProposta,
   marcarFechada,
-  marcarPerdida,
   cancelarProposta,
-  gerarMagicLink,
   enviarProposta,
   enviarContratoParaAssinatura,
 } from './actions'
@@ -26,7 +24,7 @@ interface Props {
   papel: 'admin' | 'operador'
 }
 
-type ModalType = 'devolver' | 'rejeitar' | 'fechada' | 'perdida' | 'cancelar' | 'magic' | null
+type ModalType = 'devolver' | 'rejeitar' | 'fechada' | 'cancelar' | null
 
 export function PropostaAcoes({ id, status, papel }: Props) {
   const router = useRouter()
@@ -36,28 +34,22 @@ export function PropostaAcoes({ id, status, papel }: Props) {
   const [formaAceite, setFormaAceite] = useState<FormaAceite>('email')
   const [loading, setLoading] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
-  const [link, setLink] = useState<string | null>(null)
 
   const isAdmin = papel === 'admin'
 
   function abrir(t: ModalType) {
     setTexto('')
     setErro(null)
-    setLink(null)
     setModal(t)
   }
 
-  async function executar(fn: () => Promise<{ ok: boolean; erro?: string; magic_link?: string }>) {
+  async function executar(fn: () => Promise<{ ok: boolean; erro?: string }>) {
     setErro(null)
     setLoading(true)
     const r = await fn()
     setLoading(false)
     if (!r.ok) {
       setErro(r.erro ?? 'Erro ao executar ação.')
-      return
-    }
-    if (r.magic_link) {
-      setLink(r.magic_link)
       return
     }
     setModal(null)
@@ -69,7 +61,6 @@ export function PropostaAcoes({ id, status, papel }: Props) {
   const podeEnviar = status === 'aprovada'
   const podeFechar = ['enviada', 'aberta', 'em_negociacao'].includes(status)
   const podeGerarContrato = status === 'fechada'
-  const podePerder = !['fechada', 'contrato_gerado', 'rejeitada', 'perdida', 'cancelada'].includes(status)
   const podeCancelar = isAdmin && !['contrato_gerado', 'cancelada'].includes(status)
 
   return (
@@ -108,19 +99,11 @@ export function PropostaAcoes({ id, status, papel }: Props) {
             Marcar fechada
           </Button>
         )}
-        {podePerder && (
-          <Button variant="ghost" onClick={() => abrir('perdida')}>
-            Marcar perdida
-          </Button>
-        )}
         {podeCancelar && (
           <Button variant="ghost" onClick={() => abrir('cancelar')}>
             Cancelar proposta
           </Button>
         )}
-        <Button variant="ghost" onClick={() => abrir('magic')}>
-          Gerar link p/ cliente
-        </Button>
       </div>
 
       <Modal open={modal === 'devolver'} onClose={() => setModal(null)} title="Devolver proposta">
@@ -164,17 +147,6 @@ export function PropostaAcoes({ id, status, papel }: Props) {
         </div>
       </Modal>
 
-      <Modal open={modal === 'perdida'} onClose={() => setModal(null)} title="Marcar como perdida">
-        <Textarea label="Motivo da perda" value={texto} onChange={(e) => setTexto(e.target.value)} rows={4} />
-        {erro && <p style={{ color: '#D64545', fontSize: 13, marginTop: 8 }}>{erro}</p>}
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
-          <Button variant="ghost" onClick={() => setModal(null)}>Cancelar</Button>
-          <Button onClick={() => executar(() => marcarPerdida(id, texto))} loading={loading}>
-            Confirmar
-          </Button>
-        </div>
-      </Modal>
-
       <Modal open={modal === 'cancelar'} onClose={() => setModal(null)} title="Cancelar proposta">
         <Textarea label="Motivo do cancelamento" value={texto} onChange={(e) => setTexto(e.target.value)} rows={4} />
         {erro && <p style={{ color: '#D64545', fontSize: 13, marginTop: 8 }}>{erro}</p>}
@@ -184,45 +156,6 @@ export function PropostaAcoes({ id, status, papel }: Props) {
             Cancelar proposta
           </Button>
         </div>
-      </Modal>
-
-      <Modal open={modal === 'magic'} onClose={() => setModal(null)} title="Link de acesso para o cliente">
-        {link ? (
-          <>
-            <p style={{ fontSize: 13, marginBottom: 12 }}>
-              Compartilhe este link com o cliente (válido por 24h):
-            </p>
-            <code
-              style={{
-                display: 'block',
-                padding: 12,
-                background: '#F0F4FB',
-                borderRadius: 8,
-                fontSize: 12,
-                wordBreak: 'break-all',
-                border: '1px solid #E5EAF2',
-              }}
-            >
-              {link}
-            </code>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
-              <Button onClick={() => setModal(null)}>Fechar</Button>
-            </div>
-          </>
-        ) : (
-          <>
-            <p style={{ fontSize: 13, marginBottom: 8 }}>
-              Gerar novo link de acesso para o cliente preencher/atualizar os dados da empresa?
-            </p>
-            {erro && <p style={{ color: '#D64545', fontSize: 13 }}>{erro}</p>}
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
-              <Button variant="ghost" onClick={() => setModal(null)}>Cancelar</Button>
-              <Button onClick={() => executar(() => gerarMagicLink(id))} loading={loading}>
-                Gerar link
-              </Button>
-            </div>
-          </>
-        )}
       </Modal>
     </>
   )
