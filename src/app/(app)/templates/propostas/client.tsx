@@ -132,7 +132,7 @@ export function TemplatesPropostasClient({ templates, contratos }: Props) {
     <>
       <PageHeader
         title="Templates de proposta"
-        subtitle="Sobe o .docx pronto com formatação e placeholders. Sistema só substitui {{}} ao gerar a proposta."
+        subtitle="Suba a proposta completa em .docx (com escopo já embutido). Sistema só substitui placeholders de dados ({{nome_cliente}}, {{valor_adesao}}, etc) ao gerar."
         actions={<Button onClick={abrirNovo}>+ Nova proposta</Button>}
       />
 

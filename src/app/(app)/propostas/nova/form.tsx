@@ -2,11 +2,10 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Client, Contractor, ProposalTemplate, ScopeTemplate, EscopoTipo, formatCurrency } from '@/lib/db/types'
+import { Client, Contractor, ProposalTemplate, formatCurrency } from '@/lib/db/types'
 import { formatCnpj, onlyDigits } from '@/lib/db/cnpj'
 import { Card } from '@/components/Card'
 import { Input } from '@/components/Input'
-import { Textarea } from '@/components/Textarea'
 import { Select } from '@/components/Select'
 import { Button } from '@/components/Button'
 import { PageHeader } from '@/components/PageHeader'
@@ -14,7 +13,6 @@ import { criarProposta } from './actions'
 
 interface Props {
   templates: ProposalTemplate[]
-  escopos: ScopeTemplate[]
   contratantes: Contractor[]
   clientePre: Client | null
 }
@@ -36,7 +34,7 @@ function formatCep(s: string): string {
 
 const UFS = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO']
 
-export function NovaPropostaForm({ templates, escopos, contratantes, clientePre }: Props) {
+export function NovaPropostaForm({ templates, contratantes, clientePre }: Props) {
   const router = useRouter()
 
   // Contratante (cliente)
@@ -62,9 +60,6 @@ export function NovaPropostaForm({ templates, escopos, contratantes, clientePre 
 
   // Proposta
   const [templateId, setTemplateId] = useState(templates[0]?.id ?? '')
-  const [scopeId, setScopeId] = useState<string>('')
-  const [escopoTipo, setEscopoTipo] = useState<EscopoTipo>('padrao')
-  const [escopo, setEscopo] = useState(escopos[0]?.corpo ?? '')
 
   // Comercial
   const [prazo, setPrazo] = useState(5)
@@ -134,18 +129,6 @@ export function NovaPropostaForm({ templates, escopos, contratantes, clientePre 
     setTemplateId(id)
   }
 
-  function aoTrocarEscopo(id: string) {
-    setScopeId(id)
-    // No tipo "padrão" o sistema usa o .docx direto, não precisa preencher texto
-  }
-
-  function aoTrocarTipo(tipo: EscopoTipo) {
-    setEscopoTipo(tipo)
-    if (tipo === 'personalizado') {
-      setEscopo('')
-    }
-  }
-
   async function submeter() {
     setErro(null)
     if (!clientId && (!cnpj || !razaoSocial || !emailCliente)) {
@@ -154,14 +137,6 @@ export function NovaPropostaForm({ templates, escopos, contratantes, clientePre 
     }
     if (!templateId) {
       setErro('Escolha o template.')
-      return
-    }
-    if (escopoTipo === 'padrao' && !scopeId) {
-      setErro('Escolha um escopo padrão (ou troque para "Personalizado").')
-      return
-    }
-    if (escopoTipo === 'personalizado' && !escopo.trim()) {
-      setErro('Preencha o escopo personalizado.')
       return
     }
     if (!contractorId) {
@@ -192,9 +167,9 @@ export function NovaPropostaForm({ templates, escopos, contratantes, clientePre 
       endereco_cep: cep || undefined,
       contractor_id: contractorId,
       proposal_template_id: templateId,
-      scope_template_id: scopeId || null,
-      escopo_tipo: escopoTipo,
-      escopo_final: escopo,
+      scope_template_id: null,
+      escopo_tipo: 'padrao',
+      escopo_final: '',
       prazo_meses: prazo,
       valor_adesao: valorAdesao,
       num_parcelas: parcelas,
@@ -218,7 +193,7 @@ export function NovaPropostaForm({ templates, escopos, contratantes, clientePre 
 
   return (
     <div style={{ maxWidth: 920, margin: '0 auto' }}>
-      <PageHeader title="Nova proposta" subtitle="Preencha as 3 seções abaixo e crie a proposta como rascunho." />
+      <PageHeader title="Nova proposta" subtitle="Selecione o tipo de proposta, contratante e valores. O escopo já está embutido no template." />
 
       {magicLinkGerado && (
         <Card style={{ marginBottom: 16, background: '#E6F5EC', borderColor: '#1B9E5C' }}>
@@ -368,7 +343,7 @@ export function NovaPropostaForm({ templates, escopos, contratantes, clientePre 
                 <option key={c.id} value={c.id}>{c.razao_social}</option>
               ))}
             </Select>
-            <Select label="Template do documento" value={templateId} onChange={(e) => aoTrocarTemplate(e.target.value)}>
+            <Select label="Tipo de proposta" value={templateId} onChange={(e) => aoTrocarTemplate(e.target.value)}>
               {templates.length === 0 && <option value="">— sem templates cadastrados —</option>}
               {templates.map((t) => (
                 <option key={t.id} value={t.id}>
@@ -377,46 +352,9 @@ export function NovaPropostaForm({ templates, escopos, contratantes, clientePre 
               ))}
             </Select>
 
-            <Select label="Escopo (biblioteca por modalidade)" value={scopeId} onChange={(e) => aoTrocarEscopo(e.target.value)}>
-              <option value="">— escolha um escopo —</option>
-              {escopos.map((s) => (
-                <option key={s.id} value={s.id}>{s.nome}</option>
-              ))}
-            </Select>
-
-            <div>
-              <span style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', color: '#0D1B3E' }}>
-                Tipo de escopo
-              </span>
-              <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
-                {(['padrao', 'personalizado'] as EscopoTipo[]).map((t) => (
-                  <label key={t} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14 }}>
-                    <input
-                      type="radio"
-                      name="escopoTipo"
-                      checked={escopoTipo === t}
-                      onChange={() => aoTrocarTipo(t)}
-                    />
-                    {t === 'padrao' ? 'Padrão (usa .docx cadastrado)' : 'Personalizado (texto livre)'}
-                  </label>
-                ))}
-              </div>
+            <div style={{ background: '#F0F4FB', padding: 12, borderRadius: 10, fontSize: 13, color: '#0D1B3E' }}>
+              ℹ️ Cada template já contém o escopo da modalidade. O sistema só preenche os dados do contratante e os valores comerciais.
             </div>
-
-            {escopoTipo === 'padrao' ? (
-              <div style={{ background: '#F0F4FB', padding: 12, borderRadius: 10, fontSize: 13, color: '#0D1B3E' }}>
-                ℹ️ Sistema vai usar o conteúdo do escopo cadastrado (com formatação rica) ao gerar o PDF.
-              </div>
-            ) : (
-              <Textarea
-                label="Escopo personalizado"
-                value={escopo}
-                onChange={(e) => setEscopo(e.target.value)}
-                rows={12}
-                style={{ minHeight: 200, fontSize: 13 }}
-                placeholder="Digite o escopo completo da proposta (texto plano)…"
-              />
-            )}
           </div>
         </Card>
       </section>

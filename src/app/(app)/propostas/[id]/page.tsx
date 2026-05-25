@@ -107,27 +107,6 @@ export default async function PropostaDetailPage({ params }: { params: Promise<{
           </Card>
 
           <Card>
-            <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>Escopo</h3>
-            <div
-              style={{
-                background: '#F0F4FB',
-                padding: 16,
-                borderRadius: 10,
-                fontSize: 13,
-                whiteSpace: 'pre-wrap',
-                fontFamily: 'monospace',
-                maxHeight: 400,
-                overflowY: 'auto',
-              }}
-            >
-              {proposta.escopo_final}
-            </div>
-            <div style={{ marginTop: 8, fontSize: 12, color: '#8A9AB5' }}>
-              Tipo: <strong style={{ color: '#0D1B3E' }}>{proposta.escopo_tipo}</strong>
-            </div>
-          </Card>
-
-          <Card>
             <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>Histórico</h3>
             {auditLogs.length === 0 ? (
               <p style={{ color: '#8A9AB5', fontSize: 13 }}>Sem eventos registrados ainda.</p>

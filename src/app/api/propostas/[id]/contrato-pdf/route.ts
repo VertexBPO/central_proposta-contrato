@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { Client, Contractor, Proposal, ContractTemplate } from '@/lib/db/types'
-import { preencherDocx, extrairXmlCorpoEscopo, textoParaXmlParagrafos, neutralizarPageBreaksDeEstilos, garantirMargemSuperior, removerParagrafosVaziosDoDocx } from '@/lib/docs/gerar-com-template'
+import {
+  preencherDocx,
+  neutralizarPageBreaksDeEstilos,
+  garantirMargemSuperior,
+  removerParagrafosVaziosDoDocx,
+} from '@/lib/docs/gerar-com-template'
 import { docxParaPdf } from '@/lib/cloudconvert/client'
 import { montarValores } from '@/lib/docs/valores-placeholders'
 import { aplicarAlphaNasWatermarks } from '@/lib/docs/watermark-alpha'
@@ -54,25 +59,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     return new NextResponse('Template de contrato sem arquivo .docx.', { status: 500 })
   }
 
-  // Escopo: busca o template vinculado pra extrair XML rico
-  let escopoXml = ''
-  const { data: scp } = proposta.scope_template_id
-    ? await admin.from('scope_templates').select('template_file_path').eq('id', proposta.scope_template_id).maybeSingle()
-    : { data: null }
-  if (scp?.template_file_path && proposta.escopo_tipo !== 'personalizado') {
-    try {
-      escopoXml = await extrairXmlCorpoEscopo(scp.template_file_path)
-    } catch (e) {
-      return new NextResponse(
-        `Falha ao extrair escopo: ${e instanceof Error ? e.message : 'erro'}`,
-        { status: 500 }
-      )
-    }
-  } else {
-    escopoXml = textoParaXmlParagrafos(proposta.escopo_final ?? '')
-  }
-
-  const valores = montarValores(proposta, cliente, contratante, escopoXml)
+  // O template do contrato é completo — só preenche placeholders de dados
+  const valores = montarValores(proposta, cliente, contratante, '')
 
   let docxPreenchido: Buffer
   try {
@@ -86,27 +74,19 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
   try {
     docxPreenchido = await neutralizarPageBreaksDeEstilos(docxPreenchido)
-  } catch {
-    // Não bloqueia
-  }
+  } catch {}
 
   try {
     docxPreenchido = await removerParagrafosVaziosDoDocx(docxPreenchido)
-  } catch {
-    // Não bloqueia
-  }
+  } catch {}
 
   try {
     docxPreenchido = await garantirMargemSuperior(docxPreenchido, 2098)
-  } catch {
-    // Não bloqueia
-  }
+  } catch {}
 
   try {
     docxPreenchido = await aplicarAlphaNasWatermarks(docxPreenchido)
-  } catch {
-    // Não bloqueia geração — só perde transparência
-  }
+  } catch {}
 
   let pdfBytes: Buffer
   try {

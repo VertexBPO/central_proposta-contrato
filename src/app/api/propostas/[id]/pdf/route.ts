@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { Client, Contractor, Proposal, ProposalTemplate, ScopeTemplate } from '@/lib/db/types'
-import { preencherDocx, extrairXmlCorpoEscopo, textoParaXmlParagrafos, neutralizarPageBreaksDeEstilos, garantirMargemSuperior, removerParagrafosVaziosDoDocx } from '@/lib/docs/gerar-com-template'
+import { Client, Contractor, Proposal, ProposalTemplate } from '@/lib/db/types'
+import {
+  preencherDocx,
+  neutralizarPageBreaksDeEstilos,
+  garantirMargemSuperior,
+  removerParagrafosVaziosDoDocx,
+} from '@/lib/docs/gerar-com-template'
 import { docxParaPdf } from '@/lib/cloudconvert/client'
 import { montarValores } from '@/lib/docs/valores-placeholders'
 import { aplicarAlphaNasWatermarks } from '@/lib/docs/watermark-alpha'
@@ -21,15 +26,12 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   if (!prop) return new NextResponse('Not found', { status: 404 })
   const proposta = prop as Proposal
 
-  const [{ data: cli }, { data: ctr }, { data: tpl }, { data: scp }] = await Promise.all([
+  const [{ data: cli }, { data: ctr }, { data: tpl }] = await Promise.all([
     admin.from('clients').select('*').eq('id', proposta.client_id).maybeSingle(),
     proposta.contractor_id
       ? admin.from('contractors').select('*').eq('id', proposta.contractor_id).maybeSingle()
       : Promise.resolve({ data: null }),
     admin.from('proposal_templates').select('*').eq('id', proposta.proposal_template_id).maybeSingle(),
-    proposta.scope_template_id
-      ? admin.from('scope_templates').select('*').eq('id', proposta.scope_template_id).maybeSingle()
-      : Promise.resolve({ data: null }),
   ])
 
   if (!cli || !ctr || !tpl) {
@@ -39,30 +41,14 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const cliente = cli as Client
   const contratante = ctr as Contractor
   const template = tpl as ProposalTemplate
-  const escopoTpl = scp as ScopeTemplate | null
 
   if (!template.template_file_path) {
     return new NextResponse('Template de proposta sem arquivo .docx. Suba o arquivo no cadastro.', { status: 500 })
   }
 
-  // Escopo: se for "padrao" e tiver .docx vinculado → injeta XML rico via {{@escopo}}.
-  // Se for "personalizado" → texto plano vira parágrafos OOXML válidos.
-  let escopoXml = ''
-  if (escopoTpl?.template_file_path && proposta.escopo_tipo !== 'personalizado') {
-    try {
-      escopoXml = await extrairXmlCorpoEscopo(escopoTpl.template_file_path)
-    } catch (e) {
-      return new NextResponse(
-        `Falha ao extrair escopo: ${e instanceof Error ? e.message : 'erro'}`,
-        { status: 500 }
-      )
-    }
-  } else {
-    escopoXml = textoParaXmlParagrafos(proposta.escopo_final ?? '')
-  }
+  // O template já tem o escopo embutido — passa string vazia (placeholder {{escopo}} fica vazio se ainda existir)
+  const valores = montarValores(proposta, cliente, contratante, '')
 
-  // 2) Preenche o template da proposta
-  const valores = montarValores(proposta, cliente, contratante, escopoXml)
   let docxPreenchido: Buffer
   try {
     docxPreenchido = await preencherDocx(template.template_file_path, valores)
@@ -73,35 +59,22 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     )
   }
 
-  // 2b) Neutraliza keepNext/pageBreakBefore herdados via estilos (espaços mortos)
   try {
     docxPreenchido = await neutralizarPageBreaksDeEstilos(docxPreenchido)
-  } catch {
-    // Não bloqueia
-  }
+  } catch {}
 
-  // 2b.1) Remove parágrafos vazios do .docx merged (proposta + escopo)
   try {
     docxPreenchido = await removerParagrafosVaziosDoDocx(docxPreenchido)
-  } catch {
-    // Não bloqueia
-  }
+  } catch {}
 
-  // 2c) Garante margem superior >= 3.7cm (2098 twips) pra texto não pisar no logo do header
   try {
     docxPreenchido = await garantirMargemSuperior(docxPreenchido, 2098)
-  } catch {
-    // Não bloqueia
-  }
+  } catch {}
 
-  // 2d) Aplica alpha nas watermarks (LibreOffice ignora o "Washout" do Word)
   try {
     docxPreenchido = await aplicarAlphaNasWatermarks(docxPreenchido)
-  } catch {
-    // Não bloqueia
-  }
+  } catch {}
 
-  // 3) Converte pra PDF via CloudConvert
   let pdfBytes: Buffer
   try {
     pdfBytes = await docxParaPdf(docxPreenchido, `proposta-${proposta.numero}.docx`)
@@ -112,7 +85,6 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     )
   }
 
-  // 4) Salva no Storage (cache)
   const storagePath = `propostas/${proposta.id}/${proposta.numero}.pdf`
   await admin.storage.from('documentos').upload(storagePath, pdfBytes, {
     contentType: 'application/pdf',
