@@ -75,7 +75,7 @@ export default async function PropostaDetailPage({ params }: { params: Promise<{
 
       <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
         <a
-          href={`/api/propostas/${proposta.id}/contrato-pdf`}
+          href={`/api/propostas/${proposta.id}/pdf`}
           target="_blank"
           rel="noreferrer"
           style={{
@@ -88,7 +88,7 @@ export default async function PropostaDetailPage({ params }: { params: Promise<{
             textDecoration: 'none',
           }}
         >
-          📄 Visualizar PDF do Contrato
+          📄 Visualizar Proposta
         </a>
       </div>
 

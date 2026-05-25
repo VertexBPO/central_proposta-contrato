@@ -328,6 +328,58 @@ export async function gerarMagicLink(id: string): Promise<Resultado> {
   }
 }
 
+interface AtualizarPropostaInput {
+  contractor_id: string
+  proposal_template_id: string
+  scope_template_id: string | null
+  escopo_tipo: 'padrao' | 'personalizado'
+  escopo_final: string
+  prazo_meses: number
+  valor_adesao: number
+  num_parcelas: number
+  valor_parcela: number
+  data_inicio_contrato: string
+}
+
+export async function atualizarProposta(id: string, input: AtualizarPropostaInput): Promise<Resultado> {
+  const user = await getUserOrErr()
+  if (!user) return { ok: false, erro: 'Sessão inválida.' }
+
+  const admin = createAdminClient()
+  const { data: prop } = await admin
+    .from('proposals')
+    .select('status')
+    .eq('id', id)
+    .maybeSingle()
+  if (!prop) return { ok: false, erro: 'Proposta não encontrada.' }
+  if (!['rascunho', 'devolvida'].includes(prop.status)) {
+    return { ok: false, erro: `Não é possível editar proposta no status "${prop.status}". Só rascunho ou devolvida.` }
+  }
+
+  const { error } = await admin
+    .from('proposals')
+    .update({
+      contractor_id: input.contractor_id,
+      proposal_template_id: input.proposal_template_id,
+      scope_template_id: input.scope_template_id,
+      escopo_tipo: input.escopo_tipo,
+      escopo_final: input.escopo_final,
+      prazo_meses: input.prazo_meses,
+      valor_adesao: input.valor_adesao,
+      num_parcelas: input.num_parcelas,
+      valor_parcela: input.valor_parcela,
+      data_inicio_contrato: input.data_inicio_contrato,
+    })
+    .eq('id', id)
+
+  if (error) return { ok: false, erro: error.message }
+
+  await logAudit(user.id, 'editar', id, null, input)
+  revalidatePath(`/propostas/${id}`)
+  revalidatePath('/dashboard')
+  return { ok: true }
+}
+
 export async function deletarProposta(id: string): Promise<Resultado> {
   const user = await getUserOrErr()
   if (!user) return { ok: false, erro: 'Sessão inválida.' }

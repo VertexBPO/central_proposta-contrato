@@ -34,11 +34,25 @@ export async function extrairXmlCorpoEscopo(storagePath: string): Promise<string
   let body = bodyMatch[1]
 
   body = body.replace(/<w:sectPr[\s\S]*?<\/w:sectPr>/g, '')
-  // Remove page breaks explícitos do escopo (não devem forçar quebra na proposta)
   body = body.replace(/<w:br\s+w:type="page"\s*\/>/g, '')
   body = body.replace(/<w:pageBreakBefore\s*\/>/g, '')
   body = converterListasParaTexto(body, numberingXml)
+  body = removerParagrafosVazios(body)
   return body.trim()
+}
+
+/**
+ * Remove <w:p> que não contém nenhum <w:t> com texto. Word produz muitos parágrafos
+ * vazios (rsid placeholders, espaçadores) que viram espaço em branco no PDF.
+ */
+function removerParagrafosVazios(bodyXml: string): string {
+  return bodyXml.replace(/<w:p[\s>][\s\S]*?<\/w:p>/g, (paragraph) => {
+    // Mantém parágrafos com imagem/drawing (são visuais)
+    if (paragraph.includes('<w:drawing') || paragraph.includes('<w:pict')) return paragraph
+    // Mantém parágrafos com texto (qualquer <w:t> com conteúdo não-vazio)
+    if (/<w:t[^>]*>[^<]+<\/w:t>/.test(paragraph)) return paragraph
+    return ''
+  })
 }
 
 /**
@@ -133,10 +147,15 @@ function converterListasParaTexto(bodyXml: string, numberingXml: string): string
 
       if (cleaned.includes('<w:pPr>')) {
         cleaned = cleaned.replace(/<w:pPr>([\s\S]*?)<\/w:pPr>/, (_full, inner: string) => {
-          const cleanInner = inner
+          // Schema OOXML: <w:rPr> deve ser sempre o ÚLTIMO elemento em <w:pPr>.
+          // Senão LibreOffice ignora propriedades posteriores (ex.: jc).
+          let cleanInner = inner
             .replace(/<w:jc[^/]*\/>/g, '')
             .replace(/<w:ind[^/]*\/>/g, '')
-          return `<w:pPr>${cleanInner}${formatProps}</w:pPr>`
+          const rPrMatch = cleanInner.match(/<w:rPr>[\s\S]*?<\/w:rPr>/)
+          const rPr = rPrMatch ? rPrMatch[0] : ''
+          if (rPr) cleanInner = cleanInner.replace(/<w:rPr>[\s\S]*?<\/w:rPr>/, '')
+          return `<w:pPr>${cleanInner}${formatProps}${rPr}</w:pPr>`
         })
       } else {
         cleaned = cleaned.replace(/(<w:p[^>]*>)/, `$1<w:pPr>${formatProps}</w:pPr>`)
@@ -179,6 +198,30 @@ export function textoParaXmlParagrafos(texto: string): string {
 
 export interface PlaceholderValues {
   [key: string]: string | number
+}
+
+/**
+ * Garante que a margem superior do .docx tem pelo menos `minTwips` (1cm = 567 twips).
+ * Evita que o texto pise no logo do cabeçalho.
+ */
+export async function garantirMargemSuperior(docxBuffer: Buffer, minTwips: number): Promise<Buffer> {
+  const zip = await JSZip.loadAsync(docxBuffer)
+  const docFile = zip.file('word/document.xml')
+  if (!docFile) return docxBuffer
+  let xml = await docFile.async('string')
+
+  xml = xml.replace(/<w:pgMar\s([^/>]+)\/>/g, (full, attrs: string) => {
+    const topMatch = attrs.match(/w:top="(\d+)"/)
+    const currentTop = topMatch ? parseInt(topMatch[1], 10) : 0
+    if (currentTop >= minTwips) return full
+    const newAttrs = topMatch
+      ? attrs.replace(/w:top="\d+"/, `w:top="${minTwips}"`)
+      : `w:top="${minTwips}" ${attrs}`
+    return `<w:pgMar ${newAttrs}/>`
+  })
+
+  zip.file('word/document.xml', xml)
+  return await zip.generateAsync({ type: 'nodebuffer' })
 }
 
 /**
