@@ -182,6 +182,31 @@ export interface PlaceholderValues {
 }
 
 /**
+ * Neutraliza propriedades de quebra de página herdadas via estilos do .docx.
+ *
+ * Word/LibreOffice por padrão põem keepNext + pageBreakBefore em estilos de Heading,
+ * o que causa espaços mortos quando o conteúdo é injetado dinamicamente (escopo).
+ * Roda em word/styles.xml após preencher o template e antes de mandar pro CloudConvert.
+ */
+export async function neutralizarPageBreaksDeEstilos(docxBuffer: Buffer): Promise<Buffer> {
+  const zip = await JSZip.loadAsync(docxBuffer)
+  const stylesFile = zip.file('word/styles.xml')
+  if (!stylesFile) return docxBuffer
+
+  let styles = await stylesFile.async('string')
+  styles = styles
+    .replace(/<w:keepNext\s*\/>/g, '')
+    .replace(/<w:keepNext\s+w:val="[^"]*"\s*\/>/g, '')
+    .replace(/<w:keepLines\s*\/>/g, '')
+    .replace(/<w:keepLines\s+w:val="[^"]*"\s*\/>/g, '')
+    .replace(/<w:pageBreakBefore\s*\/>/g, '')
+    .replace(/<w:pageBreakBefore\s+w:val="[^"]*"\s*\/>/g, '')
+
+  zip.file('word/styles.xml', styles)
+  return await zip.generateAsync({ type: 'nodebuffer' })
+}
+
+/**
  * Carrega arquivo .docx do storage, preenche placeholders, retorna buffer.
  */
 export async function preencherDocx(
