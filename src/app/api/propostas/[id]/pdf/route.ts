@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { Client, Contractor, Proposal, ProposalTemplate, ScopeTemplate } from '@/lib/db/types'
-import { preencherDocx, extrairXmlCorpoEscopo, textoParaXmlParagrafos, neutralizarPageBreaksDeEstilos, garantirMargemSuperior } from '@/lib/docs/gerar-com-template'
+import { preencherDocx, extrairXmlCorpoEscopo, textoParaXmlParagrafos, neutralizarPageBreaksDeEstilos, garantirMargemSuperior, removerParagrafosVaziosDoDocx } from '@/lib/docs/gerar-com-template'
 import { docxParaPdf } from '@/lib/cloudconvert/client'
 import { montarValores } from '@/lib/docs/valores-placeholders'
 import { aplicarAlphaNasWatermarks } from '@/lib/docs/watermark-alpha'
@@ -76,6 +76,13 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   // 2b) Neutraliza keepNext/pageBreakBefore herdados via estilos (espaços mortos)
   try {
     docxPreenchido = await neutralizarPageBreaksDeEstilos(docxPreenchido)
+  } catch {
+    // Não bloqueia
+  }
+
+  // 2b.1) Remove parágrafos vazios do .docx merged (proposta + escopo)
+  try {
+    docxPreenchido = await removerParagrafosVaziosDoDocx(docxPreenchido)
   } catch {
     // Não bloqueia
   }

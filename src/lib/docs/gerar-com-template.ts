@@ -201,6 +201,31 @@ export interface PlaceholderValues {
 }
 
 /**
+ * Remove parágrafos vazios do .docx merged (proposta + escopo preenchidos).
+ * O template da proposta costuma ter 10+ parágrafos vazios seguidos como
+ * "espaçadores" — eles viram espaço morto enorme no PDF.
+ *
+ * Mantém parágrafos com texto, com imagem, ou que contenham <w:sectPr>
+ * (este último carrega configuração de seção e não pode ser removido).
+ */
+export async function removerParagrafosVaziosDoDocx(docxBuffer: Buffer): Promise<Buffer> {
+  const zip = await JSZip.loadAsync(docxBuffer)
+  const docFile = zip.file('word/document.xml')
+  if (!docFile) return docxBuffer
+  let xml = await docFile.async('string')
+
+  xml = xml.replace(/<w:p[\s>][\s\S]*?<\/w:p>/g, (paragraph) => {
+    if (paragraph.includes('<w:sectPr')) return paragraph
+    if (paragraph.includes('<w:drawing') || paragraph.includes('<w:pict')) return paragraph
+    if (/<w:t[^>]*>[^<]+<\/w:t>/.test(paragraph)) return paragraph
+    return ''
+  })
+
+  zip.file('word/document.xml', xml)
+  return await zip.generateAsync({ type: 'nodebuffer' })
+}
+
+/**
  * Garante que a margem superior do .docx tem pelo menos `minTwips` (1cm = 567 twips).
  * Evita que o texto pise no logo do cabeçalho.
  */
