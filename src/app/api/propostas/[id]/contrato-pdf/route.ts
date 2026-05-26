@@ -60,7 +60,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   // O template do contrato é completo — só preenche placeholders de dados
-  const valores = montarValores(proposta, cliente, contratante, '')
+  const valores = montarValores(proposta, cliente, contratante)
 
   let docxPreenchido: Buffer
   try {

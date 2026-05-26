@@ -187,7 +187,7 @@ export async function enviarProposta(id: string): Promise<Resultado> {
     return { ok: false, erro: 'Template de proposta sem arquivo .docx.' }
   }
 
-  const valores = montarValores(proposta, cliente, contratante, proposta.escopo_final ?? '')
+  const valores = montarValores(proposta, cliente, contratante)
   let pdf: Buffer
   try {
     const docx = await preencherDocx(templatePath, valores)
@@ -267,7 +267,7 @@ export async function enviarContratoParaAssinatura(id: string): Promise<Resultad
   if (!ctpl.template_file_path) return { ok: false, erro: 'Template de contrato sem arquivo .docx.' }
 
   // Gera PDF via docxtemplater + CloudConvert
-  const valores = montarValores(proposta, cliente, contratante, proposta.escopo_final ?? '')
+  const valores = montarValores(proposta, cliente, contratante)
   let pdf: Buffer
   try {
     const docx = await preencherDocx(ctpl.template_file_path, valores)

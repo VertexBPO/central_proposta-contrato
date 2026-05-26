@@ -1,10 +1,16 @@
 /**
  * Constrói o map de placeholders → valores reais a partir dos dados da proposta.
- * Mesmas chaves do antigo render-placeholders, agora servindo docxtemplater.
+ *
+ * Suporta 3 conjuntos de templates simultaneamente:
+ *  - Propostas Assessoria (lowercase, 12 placeholders)
+ *  - Proposta BPO Financeiro (UPPERCASE, 8 placeholders, "mensalidade" em vez de "parcela")
+ *  - Contrato Assessoria (lowercase, com dados de contratante/contratada)
+ *
+ * Cada template usa apenas os placeholders que tem no .docx — os demais são ignorados.
  */
 import extenso from 'extenso'
 import { Client, Contractor, Proposal, formatCurrency, formatDate } from '@/lib/db/types'
-import { formatCnpj, formatDocumento, labelDocumento } from '@/lib/db/cnpj'
+import { formatCnpj, formatDocumento } from '@/lib/db/cnpj'
 
 const MESES = [
   'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
@@ -38,84 +44,133 @@ function numExtenso(n: number): string {
   }
 }
 
+function enderecoCompleto(cliente: Client): string {
+  return [
+    cliente.endereco_logradouro,
+    cliente.endereco_numero,
+    cliente.endereco_complemento,
+    cliente.endereco_bairro,
+    cliente.endereco_cidade && cliente.endereco_uf
+      ? `${cliente.endereco_cidade}/${cliente.endereco_uf}`
+      : '',
+    cliente.endereco_cep ? `CEP ${cliente.endereco_cep}` : '',
+  ]
+    .filter(Boolean)
+    .join(', ')
+}
+
 export function montarValores(
   proposal: Proposal,
   cliente: Client,
   contratante: Contractor,
-  escopo = ''
 ): Record<string, string> {
   const total = Number(proposal.valor_adesao) + Number(proposal.valor_parcela) * proposal.num_parcelas
   const anoAtual = new Date(proposal.data_proposta + 'T12:00:00').getFullYear()
   const dataFim = calcDataFim(proposal.data_inicio_contrato, proposal.prazo_meses)
 
-  const enderecoCliente = [
-    cliente.endereco_logradouro,
-    cliente.endereco_numero,
-    cliente.endereco_complemento,
-    cliente.endereco_bairro,
-    cliente.endereco_cidade && cliente.endereco_uf ? `${cliente.endereco_cidade}/${cliente.endereco_uf}` : '',
-    cliente.endereco_cep,
-  ]
-    .filter(Boolean)
-    .join(', ')
+  const enderecoCli = enderecoCompleto(cliente)
+  const nomeContratada = contratante.razao_social
+  const docContratada = formatDocumento(contratante.documento, contratante.tipo)
+  const enderecoContratada = contratante.endereco
 
-  return {
-    // Cliente
-    razao_social: cliente.razao_social,
-    nome_empresa: cliente.razao_social,
-    cnpj: formatCnpj(cliente.cnpj),
-    cnpj_numeros: cliente.cnpj,
-    responsavel_nome: cliente.responsavel_nome ?? '',
-    nome_cliente: cliente.responsavel_nome ?? '',
-    email_cliente: cliente.email,
-    telefone_cliente: cliente.telefone ?? '',
-    endereco_cliente: enderecoCliente,
-
-    // Contratante
-    contratante_razao_social: contratante.razao_social,
-    contratante_nome: contratante.razao_social,
-    contratante_documento: formatDocumento(contratante.documento, contratante.tipo),
-    contratante_documento_label: labelDocumento(contratante.tipo),
-    contratante_cnpj: formatDocumento(contratante.documento, contratante.tipo),
-    contratante_cpf: formatDocumento(contratante.documento, contratante.tipo),
-    contratante_endereco: contratante.endereco,
-    contratante_tipo: contratante.tipo,
-
-    // Proposta
-    numero: proposal.numero,
-    num_proposta: proposal.numero,
-    data_proposta: formatDate(proposal.data_proposta),
-    data_proposta_extenso: dataExtenso(proposal.data_proposta),
+  // === CONJUNTO 1 — Propostas Assessoria (lowercase, 12) ===
+  const assessoria = {
+    ano_atual: String(anoAtual),
+    ano_subsequente: String(anoAtual + 1),
     data_atual_extenso: dataExtenso(proposal.data_proposta),
+    nome_cliente: cliente.responsavel_nome ?? '',
+    nome_empresa: cliente.razao_social,
+    num_proposta: proposal.numero,
+    parcelas: String(proposal.num_parcelas),
+    parcelas_extenso: numExtenso(proposal.num_parcelas),
+    tempo_contrato: String(proposal.prazo_meses),
+    valor_adesao: formatCurrency(Number(proposal.valor_adesao)),
+    valor_extenso: valorExtenso(Number(proposal.valor_adesao)),
+    valor_parcela: formatCurrency(Number(proposal.valor_parcela)),
+  }
+
+  // === CONJUNTO 2 — Proposta BPO Financeiro (UPPERCASE, 8) ===
+  const bpoFinanceiro = {
+    ADESAO_EXTENSO: valorExtenso(Number(proposal.valor_adesao)),
+    DATA_ATUAL_EXTENSO: dataExtenso(proposal.data_proposta),
+    EMPRESA: cliente.razao_social,
+    NOME_CLIENTE: cliente.responsavel_nome ?? '',
+    NUM_PROPOSTA: proposal.numero,
+    VALOR_ADESAO: formatCurrency(Number(proposal.valor_adesao)),
+    VALOR_MENSALIDADE: formatCurrency(Number(proposal.valor_parcela)),
+    VALOR_MENSALIDADE_EXTENSO: valorExtenso(Number(proposal.valor_parcela)),
+  }
+
+  // === CONJUNTO 3 — Contrato Assessoria (lowercase, dados das partes) ===
+  const contrato = {
+    cnpj_contratante: formatCnpj(cliente.cnpj),
+    endereco_contratante: enderecoCli,
+    nome_contratada: nomeContratada,
+    cnpj_contratada: docContratada,
+    endereco_contratada: enderecoContratada,
+    data_assinatura_extenso: dataExtenso(proposal.data_proposta),
+  }
+
+  // === Valores auxiliares ainda úteis (legado / contrato dinâmico) ===
+  const auxiliares = {
+    numero: proposal.numero,
+    data_proposta: formatDate(proposal.data_proposta),
     data_inicio: formatDate(proposal.data_inicio_contrato),
     data_inicio_extenso: dataExtenso(proposal.data_inicio_contrato),
     data_fim: formatDate(dataFim),
     data_fim_extenso: dataExtenso(dataFim),
-    data_termino: formatDate(dataFim),
-
-    ano_atual: String(anoAtual),
-    ano_subsequente: String(anoAtual + 1),
-
-    // Comercial
-    prazo_meses: String(proposal.prazo_meses),
-    prazo_meses_extenso: numExtenso(proposal.prazo_meses),
-    tempo_contrato: String(proposal.prazo_meses),
-
-    valor_adesao: formatCurrency(Number(proposal.valor_adesao)),
-    valor_adesao_extenso: valorExtenso(Number(proposal.valor_adesao)),
-
-    num_parcelas: String(proposal.num_parcelas),
-    num_parcelas_extenso: numExtenso(proposal.num_parcelas),
-    parcelas: String(proposal.num_parcelas),
-    parcelas_extenso: numExtenso(proposal.num_parcelas),
-
-    valor_parcela: formatCurrency(Number(proposal.valor_parcela)),
-    valor_parcela_extenso: valorExtenso(Number(proposal.valor_parcela)),
-
     valor_total: formatCurrency(total),
     valor_total_extenso: valorExtenso(total),
+    cnpj: formatCnpj(cliente.cnpj),
+    email_cliente: cliente.email,
+    endereco_cliente: enderecoCli,
+  }
 
-    // Escopo (já preenchido pela view do template de proposta)
-    escopo,
+  return {
+    ...assessoria,
+    ...bpoFinanceiro,
+    ...contrato,
+    ...auxiliares,
   }
 }
+
+/**
+ * Lista oficial de placeholders disponíveis, organizados por categoria.
+ * Usado na tela de referência (Templates → Propostas/Contratos).
+ */
+export const PLACEHOLDERS_DISPONIVEIS = {
+  'Propostas Assessoria': [
+    { nome: 'ano_atual', descricao: 'Ano da proposta (ex.: 2026)' },
+    { nome: 'ano_subsequente', descricao: 'Ano seguinte (ex.: 2027)' },
+    { nome: 'data_atual_extenso', descricao: 'Data da proposta por extenso (22 de maio de 2026)' },
+    { nome: 'nome_cliente', descricao: 'Nome do responsável do contratante' },
+    { nome: 'nome_empresa', descricao: 'Razão social do contratante' },
+    { nome: 'num_proposta', descricao: 'Número da proposta (0526-XX.XX)' },
+    { nome: 'parcelas', descricao: 'Número de parcelas (5)' },
+    { nome: 'parcelas_extenso', descricao: 'Número de parcelas por extenso (cinco)' },
+    { nome: 'tempo_contrato', descricao: 'Prazo do contrato em meses (5)' },
+    { nome: 'valor_adesao', descricao: 'Valor de adesão formatado (R$ 2.700,00)' },
+    { nome: 'valor_extenso', descricao: 'Valor de adesão por extenso (dois mil e setecentos reais)' },
+    { nome: 'valor_parcela', descricao: 'Valor de cada parcela (R$ 540,00)' },
+  ],
+  'Proposta BPO Financeiro': [
+    { nome: 'ADESAO_EXTENSO', descricao: 'Valor de adesão por extenso' },
+    { nome: 'DATA_ATUAL_EXTENSO', descricao: 'Data da proposta por extenso' },
+    { nome: 'EMPRESA', descricao: 'Razão social do contratante' },
+    { nome: 'NOME_CLIENTE', descricao: 'Nome do responsável' },
+    { nome: 'NUM_PROPOSTA', descricao: 'Número da proposta' },
+    { nome: 'VALOR_ADESAO', descricao: 'Valor de adesão formatado' },
+    { nome: 'VALOR_MENSALIDADE', descricao: 'Valor da mensalidade (= valor_parcela)' },
+    { nome: 'VALOR_MENSALIDADE_EXTENSO', descricao: 'Mensalidade por extenso' },
+  ],
+  'Contratos': [
+    { nome: 'nome_empresa', descricao: 'Razão social do CONTRATANTE' },
+    { nome: 'cnpj_contratante', descricao: 'CNPJ do CONTRATANTE formatado' },
+    { nome: 'endereco_contratante', descricao: 'Endereço completo do CONTRATANTE' },
+    { nome: 'nome_contratada', descricao: 'Razão social da CONTRATADA (Vertex)' },
+    { nome: 'cnpj_contratada', descricao: 'CNPJ da CONTRATADA' },
+    { nome: 'endereco_contratada', descricao: 'Endereço da CONTRATADA' },
+    { nome: 'num_proposta', descricao: 'Número da proposta vinculada' },
+    { nome: 'data_assinatura_extenso', descricao: 'Data da assinatura por extenso' },
+  ],
+} as const

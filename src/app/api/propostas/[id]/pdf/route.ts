@@ -47,7 +47,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   // O template já tem o escopo embutido — passa string vazia (placeholder {{escopo}} fica vazio se ainda existir)
-  const valores = montarValores(proposta, cliente, contratante, '')
+  const valores = montarValores(proposta, cliente, contratante)
 
   let docxPreenchido: Buffer
   try {
