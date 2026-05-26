@@ -12,6 +12,7 @@ import { Modal } from '@/components/Modal'
 import { Badge } from '@/components/Badge'
 import { PageHeader } from '@/components/PageHeader'
 import { UploadDocx } from '@/components/UploadDocx'
+import { PlaceholdersDisponiveis } from '@/components/PlaceholdersDisponiveis'
 
 interface Props {
   templates: ProposalTemplate[]
@@ -132,9 +133,11 @@ export function TemplatesPropostasClient({ templates, contratos }: Props) {
     <>
       <PageHeader
         title="Templates de proposta"
-        subtitle="Suba a proposta completa em .docx (com escopo já embutido). Sistema só substitui placeholders de dados ({{nome_cliente}}, {{valor_adesao}}, etc) ao gerar."
+        subtitle="Suba a proposta completa em .docx (com escopo já embutido). Sistema só substitui placeholders de dados ao gerar."
         actions={<Button onClick={abrirNovo}>+ Nova proposta</Button>}
       />
+
+      <PlaceholdersDisponiveis categorias={['Propostas Assessoria', 'Proposta BPO Financeiro']} />
 
       {templates.length === 0 ? (
         <Card>

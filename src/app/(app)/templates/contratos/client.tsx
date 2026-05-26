@@ -11,6 +11,7 @@ import { Modal } from '@/components/Modal'
 import { Badge } from '@/components/Badge'
 import { PageHeader } from '@/components/PageHeader'
 import { UploadDocx } from '@/components/UploadDocx'
+import { PlaceholdersDisponiveis } from '@/components/PlaceholdersDisponiveis'
 
 interface Props {
   templates: ContractTemplate[]
@@ -123,6 +124,8 @@ export function TemplatesContratosClient({ templates }: Props) {
         subtitle="Sobe o .docx pronto (com logo, formatação, placeholders) — sistema só substitui {{}} ao gerar"
         actions={<Button onClick={abrirNovo}>+ Novo contrato</Button>}
       />
+
+      <PlaceholdersDisponiveis categorias={['Contratos']} />
 
       {templates.length === 0 ? (
         <Card>
