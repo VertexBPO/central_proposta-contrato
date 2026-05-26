@@ -35,6 +35,8 @@ interface NovaPropostaInput {
   num_parcelas: number
   valor_parcela: number
   data_inicio_contrato: string
+  // custom placeholders (valores digitados pelo operador)
+  custom_values?: Record<string, string>
   // opcional
   enviar_magic_link?: boolean
 }
@@ -148,6 +150,7 @@ export async function criarProposta(input: NovaPropostaInput): Promise<Resultado
       num_parcelas: input.num_parcelas,
       valor_parcela: input.valor_parcela,
       data_inicio_contrato: input.data_inicio_contrato,
+      custom_values: input.custom_values ?? {},
       magic_link_token,
       magic_link_expira_em,
     })

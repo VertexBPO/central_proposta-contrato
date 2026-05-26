@@ -126,11 +126,15 @@ export function montarValores(
     endereco_cliente: enderecoCli,
   }
 
+  // Custom placeholders (valores digitados pelo operador na criação da proposta)
+  const customs = proposal.custom_values ?? {}
+
   return {
     ...assessoria,
     ...bpoFinanceiro,
     ...contrato,
     ...auxiliares,
+    ...customs, // sobrescreve em caso de colisão (intencional)
   }
 }
 

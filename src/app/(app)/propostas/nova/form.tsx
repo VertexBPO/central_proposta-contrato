@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Client, Contractor, ProposalTemplate, formatCurrency } from '@/lib/db/types'
+import { Client, Contractor, ProposalTemplate, CustomPlaceholder, formatCurrency } from '@/lib/db/types'
 import { formatCnpj, onlyDigits } from '@/lib/db/cnpj'
 import { Card } from '@/components/Card'
 import { Input } from '@/components/Input'
@@ -14,6 +14,7 @@ import { criarProposta } from './actions'
 interface Props {
   templates: ProposalTemplate[]
   contratantes: Contractor[]
+  customPlaceholders: CustomPlaceholder[]
   clientePre: Client | null
 }
 
@@ -34,7 +35,7 @@ function formatCep(s: string): string {
 
 const UFS = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO']
 
-export function NovaPropostaForm({ templates, contratantes, clientePre }: Props) {
+export function NovaPropostaForm({ templates, contratantes, customPlaceholders, clientePre }: Props) {
   const router = useRouter()
 
   // Contratante (cliente)
@@ -71,6 +72,9 @@ export function NovaPropostaForm({ templates, contratantes, clientePre }: Props)
     d.setMonth(d.getMonth() + 1)
     return d.toISOString().slice(0, 10)
   })
+
+  // Custom placeholders (valores digitados pelo operador)
+  const [customValues, setCustomValues] = useState<Record<string, string>>({})
 
   // Magic link
   const [enviarMagicLink, setEnviarMagicLink] = useState(false)
@@ -175,6 +179,7 @@ export function NovaPropostaForm({ templates, contratantes, clientePre }: Props)
       num_parcelas: parcelas,
       valor_parcela: valorParcela,
       data_inicio_contrato: dataInicio,
+      custom_values: customValues,
       enviar_magic_link: enviarMagicLink,
     })
     setSalvando(false)
@@ -416,6 +421,26 @@ export function NovaPropostaForm({ templates, contratantes, clientePre }: Props)
           </div>
         </Card>
       </section>
+
+      {customPlaceholders.length > 0 && (
+        <section style={{ marginBottom: 24 }}>
+          <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12, color: '#0D1B3E' }}>
+            4. Campos personalizados
+          </h2>
+          <Card>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {customPlaceholders.map((cp) => (
+                <Input
+                  key={cp.id}
+                  label={`${cp.descricao} {{${cp.nome}}}`}
+                  value={customValues[cp.nome] ?? ''}
+                  onChange={(e) => setCustomValues((v) => ({ ...v, [cp.nome]: e.target.value }))}
+                />
+              ))}
+            </div>
+          </Card>
+        </section>
+      )}
 
       {erro && (
         <Card style={{ background: '#FCE8E8', borderColor: '#D64545', marginBottom: 16 }}>

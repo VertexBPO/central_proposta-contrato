@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { ContractTemplate, slugify } from '@/lib/db/types'
+import { ContractTemplate, CustomPlaceholder, slugify } from '@/lib/db/types'
 import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
 import { Input } from '@/components/Input'
@@ -15,9 +15,10 @@ import { PlaceholdersDisponiveis } from '@/components/PlaceholdersDisponiveis'
 
 interface Props {
   templates: ContractTemplate[]
+  customPlaceholders: CustomPlaceholder[]
 }
 
-export function TemplatesContratosClient({ templates }: Props) {
+export function TemplatesContratosClient({ templates, customPlaceholders }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [, startTransition] = useTransition()
@@ -125,7 +126,11 @@ export function TemplatesContratosClient({ templates }: Props) {
         actions={<Button onClick={abrirNovo}>+ Novo contrato</Button>}
       />
 
-      <PlaceholdersDisponiveis categorias={['Contratos']} />
+      <PlaceholdersDisponiveis
+        categorias={['Contratos']}
+        customCategorias={['contrato']}
+        customPlaceholders={customPlaceholders}
+      />
 
       {templates.length === 0 ? (
         <Card>

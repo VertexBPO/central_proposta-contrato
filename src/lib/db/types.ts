@@ -72,6 +72,24 @@ export interface ProposalTemplate {
   atualizado_em: string
 }
 
+export type CustomPlaceholderCategoria = 'proposta_assessoria' | 'proposta_bpo' | 'contrato'
+
+export interface CustomPlaceholder {
+  id: string
+  categoria: CustomPlaceholderCategoria
+  nome: string
+  descricao: string
+  ativo: boolean
+  criado_em: string
+  atualizado_em: string
+}
+
+export const CATEGORIA_LABEL: Record<CustomPlaceholderCategoria, string> = {
+  proposta_assessoria: 'Propostas Assessoria',
+  proposta_bpo: 'Proposta BPO Financeiro',
+  contrato: 'Contratos',
+}
+
 export interface ScopeTemplate {
   id: string
   nome: string
@@ -132,6 +150,7 @@ export interface Proposal {
   magic_link_expira_em: string | null
   pdf_storage_path: string | null
   docx_storage_path: string | null
+  custom_values: Record<string, string>
   criado_em: string
   atualizado_em: string
 }

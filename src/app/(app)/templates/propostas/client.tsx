@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { ContractTemplate, ProposalTemplate, slugify } from '@/lib/db/types'
+import { ContractTemplate, ProposalTemplate, CustomPlaceholder, slugify } from '@/lib/db/types'
 import { Button } from '@/components/Button'
 import { Card } from '@/components/Card'
 import { Input } from '@/components/Input'
@@ -17,9 +17,10 @@ import { PlaceholdersDisponiveis } from '@/components/PlaceholdersDisponiveis'
 interface Props {
   templates: ProposalTemplate[]
   contratos: ContractTemplate[]
+  customPlaceholders: CustomPlaceholder[]
 }
 
-export function TemplatesPropostasClient({ templates, contratos }: Props) {
+export function TemplatesPropostasClient({ templates, contratos, customPlaceholders }: Props) {
   const router = useRouter()
   const supabase = createClient()
   const [, startTransition] = useTransition()
@@ -137,7 +138,11 @@ export function TemplatesPropostasClient({ templates, contratos }: Props) {
         actions={<Button onClick={abrirNovo}>+ Nova proposta</Button>}
       />
 
-      <PlaceholdersDisponiveis categorias={['Propostas Assessoria', 'Proposta BPO Financeiro']} />
+      <PlaceholdersDisponiveis
+        categorias={['Propostas Assessoria', 'Proposta BPO Financeiro']}
+        customCategorias={['proposta_assessoria', 'proposta_bpo']}
+        customPlaceholders={customPlaceholders}
+      />
 
       {templates.length === 0 ? (
         <Card>
