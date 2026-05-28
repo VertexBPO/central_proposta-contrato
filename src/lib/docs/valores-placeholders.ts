@@ -59,10 +59,26 @@ function enderecoCompleto(cliente: Client): string {
     .join(', ')
 }
 
+function enderecoResidencialResponsavel(cliente: Client): string {
+  return [
+    cliente.responsavel_endereco_logradouro,
+    cliente.responsavel_endereco_numero,
+    cliente.responsavel_endereco_complemento,
+    cliente.responsavel_endereco_bairro,
+    cliente.responsavel_endereco_cidade && cliente.responsavel_endereco_uf
+      ? `${cliente.responsavel_endereco_cidade}/${cliente.responsavel_endereco_uf}`
+      : '',
+    cliente.responsavel_endereco_cep ? `CEP ${cliente.responsavel_endereco_cep}` : '',
+  ]
+    .filter(Boolean)
+    .join(', ')
+}
+
 export function montarValores(
   proposal: Proposal,
   cliente: Client,
   contratante: Contractor,
+  customsArg: Record<string, string> = {},
 ): Record<string, string> {
   const total = Number(proposal.valor_adesao) + Number(proposal.valor_parcela) * proposal.num_parcelas
   const anoAtual = new Date(proposal.data_proposta + 'T12:00:00').getFullYear()
@@ -111,6 +127,15 @@ export function montarValores(
     data_assinatura_extenso: dataExtenso(proposal.data_proposta),
   }
 
+  // === CONJUNTO 4 — Dados do RESPONSÁVEL (uso em contratos/propostas) ===
+  const responsavel = {
+    responsavel_nome: cliente.responsavel_nome ?? '',
+    responsavel_cargo: cliente.responsavel_cargo ?? '',
+    responsavel_cpf: cliente.responsavel_cpf ?? '',
+    responsavel_email: cliente.responsavel_email ?? '',
+    responsavel_endereco: enderecoResidencialResponsavel(cliente),
+  }
+
   // === Valores auxiliares ainda úteis (legado / contrato dinâmico) ===
   const auxiliares = {
     numero: proposal.numero,
@@ -126,15 +151,16 @@ export function montarValores(
     endereco_cliente: enderecoCli,
   }
 
-  // Custom placeholders (valores digitados pelo operador na criação da proposta)
-  const customs = proposal.custom_values ?? {}
+  // Custom placeholders: valores da proposta (custom_values) + argumento opcional
+  const customs = { ...(proposal.custom_values ?? {}), ...customsArg }
 
   return {
     ...assessoria,
     ...bpoFinanceiro,
     ...contrato,
+    ...responsavel,
     ...auxiliares,
-    ...customs, // sobrescreve em caso de colisão (intencional)
+    ...customs,
   }
 }
 
@@ -176,5 +202,12 @@ export const PLACEHOLDERS_DISPONIVEIS = {
     { nome: 'endereco_contratada', descricao: 'Endereço da CONTRATADA' },
     { nome: 'num_proposta', descricao: 'Número da proposta vinculada' },
     { nome: 'data_assinatura_extenso', descricao: 'Data da assinatura por extenso' },
+  ],
+  'Responsável (uso em propostas e contratos)': [
+    { nome: 'responsavel_nome', descricao: 'Nome completo do responsável' },
+    { nome: 'responsavel_cargo', descricao: 'Cargo do responsável na empresa' },
+    { nome: 'responsavel_cpf', descricao: 'CPF do responsável' },
+    { nome: 'responsavel_email', descricao: 'E-mail corporativo do responsável' },
+    { nome: 'responsavel_endereco', descricao: 'Endereço residencial completo do responsável' },
   ],
 } as const

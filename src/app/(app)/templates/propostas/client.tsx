@@ -139,7 +139,7 @@ export function TemplatesPropostasClient({ templates, contratos, customPlacehold
       />
 
       <PlaceholdersDisponiveis
-        categorias={['Propostas Assessoria', 'Proposta BPO Financeiro']}
+        categorias={['Propostas Assessoria', 'Proposta BPO Financeiro', 'Responsável (uso em propostas e contratos)']}
         customCategorias={['proposta_assessoria', 'proposta_bpo']}
         customPlaceholders={customPlaceholders}
       />

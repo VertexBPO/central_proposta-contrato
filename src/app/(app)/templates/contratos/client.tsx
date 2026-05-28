@@ -127,7 +127,7 @@ export function TemplatesContratosClient({ templates, customPlaceholders }: Prop
       />
 
       <PlaceholdersDisponiveis
-        categorias={['Contratos']}
+        categorias={['Contratos', 'Responsável (uso em propostas e contratos)']}
         customCategorias={['contrato']}
         customPlaceholders={customPlaceholders}
       />

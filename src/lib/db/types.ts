@@ -44,6 +44,16 @@ export interface Client {
   razao_social: string
   cnpj: string
   responsavel_nome: string | null
+  responsavel_cargo: string | null
+  responsavel_cpf: string | null
+  responsavel_email: string | null
+  responsavel_endereco_logradouro: string | null
+  responsavel_endereco_numero: string | null
+  responsavel_endereco_complemento: string | null
+  responsavel_endereco_bairro: string | null
+  responsavel_endereco_cidade: string | null
+  responsavel_endereco_uf: string | null
+  responsavel_endereco_cep: string | null
   email: string
   telefone: string | null
   endereco_logradouro: string | null

@@ -12,14 +12,34 @@ interface ItemMenu {
   adminOnly?: boolean
 }
 
-const ITENS: ItemMenu[] = [
+interface GrupoMenu {
+  label: string
+  icon: string
+  adminOnly?: boolean
+  items: ItemMenu[]
+}
+
+type Entrada = ItemMenu | GrupoMenu
+
+function isGrupo(e: Entrada): e is GrupoMenu {
+  return 'items' in e
+}
+
+const ENTRADAS: Entrada[] = [
   { href: '/dashboard', label: 'Dashboard', icon: '◧' },
-  { href: '/propostas/nova', label: 'Nova proposta', icon: '＋' },
-  { href: '/clientes', label: 'Contratantes', icon: '◉' },
   { href: '/aprovacoes', label: 'Aprovações', icon: '✓', adminOnly: true },
-  { href: '/templates/propostas', label: 'Templates', icon: '◰', adminOnly: true },
-  { href: '/contratantes', label: 'Contratada', icon: '◈', adminOnly: true },
-  { href: '/usuarios', label: 'Usuários', icon: '◌', adminOnly: true },
+  { href: '/propostas/nova', label: 'Nova proposta', icon: '＋' },
+  {
+    label: 'Cadastros',
+    icon: '◰',
+    adminOnly: true,
+    items: [
+      { href: '/templates/propostas', label: 'Templates', icon: '◰' },
+      { href: '/contratantes', label: 'Contratada', icon: '◈' },
+      { href: '/clientes', label: 'Contratantes', icon: '◉' },
+      { href: '/usuarios', label: 'Usuários', icon: '◌' },
+    ],
+  },
   { href: '/parametros', label: 'Parâmetros', icon: '⚙', adminOnly: true },
   { href: '/auditoria', label: 'Auditoria', icon: '◇', adminOnly: true },
 ]
@@ -35,7 +55,18 @@ export function Sidebar({ papel, nome }: SidebarProps) {
   const supabase = createClient()
   const [hover, setHover] = useState<string | null>(null)
 
-  const itensVisiveis = ITENS.filter((item) => !item.adminOnly || papel === 'admin')
+  // Cadastros começa aberto se está numa rota dele
+  const algumaRotaCadastros = ['/templates', '/contratantes', '/clientes', '/usuarios'].some((r) =>
+    pathname.startsWith(r),
+  )
+  const [cadastrosAberto, setCadastrosAberto] = useState(algumaRotaCadastros)
+
+  const entradasVisiveis = ENTRADAS.filter((e) => !e.adminOnly || papel === 'admin').map((e) => {
+    if (isGrupo(e)) {
+      return { ...e, items: e.items.filter(() => papel === 'admin') }
+    }
+    return e
+  })
 
   async function sair() {
     await supabase.auth.signOut()
@@ -43,7 +74,6 @@ export function Sidebar({ papel, nome }: SidebarProps) {
     router.refresh()
   }
 
-  // Iniciais do nome pro avatar
   const iniciais = nome
     .split(' ')
     .filter(Boolean)
@@ -51,6 +81,65 @@ export function Sidebar({ papel, nome }: SidebarProps) {
     .slice(0, 2)
     .join('')
     .toUpperCase()
+
+  function renderItem(item: ItemMenu, inside = false) {
+    const ativo = pathname.startsWith(item.href)
+    const isHover = hover === item.href
+    return (
+      <Link
+        key={item.href}
+        href={item.href}
+        onMouseEnter={() => setHover(item.href)}
+        onMouseLeave={() => setHover(null)}
+        style={{
+          position: 'relative',
+          padding: inside ? '8px 14px 8px 36px' : '10px 14px',
+          borderRadius: 8,
+          fontSize: inside ? 13 : 13.5,
+          fontWeight: ativo ? 600 : 500,
+          color: ativo ? '#FFFFFF' : isHover ? '#FFFFFF' : 'rgba(255,255,255,0.72)',
+          background: ativo
+            ? 'linear-gradient(90deg, rgba(46,111,229,0.18) 0%, rgba(46,111,229,0.04) 100%)'
+            : isHover
+            ? 'rgba(255,255,255,0.05)'
+            : 'transparent',
+          textDecoration: 'none',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          transition: 'background 0.15s, color 0.15s',
+        }}
+      >
+        {ativo && (
+          <span
+            style={{
+              position: 'absolute',
+              left: 0,
+              top: 8,
+              bottom: 8,
+              width: 3,
+              borderRadius: '0 2px 2px 0',
+              background: 'linear-gradient(180deg, #4F7CFF 0%, #2E6FE5 100%)',
+            }}
+          />
+        )}
+        {!inside && (
+          <span
+            style={{
+              width: 18,
+              display: 'inline-flex',
+              justifyContent: 'center',
+              fontSize: 14,
+              color: ativo ? '#4F7CFF' : 'rgba(255,255,255,0.5)',
+            }}
+          >
+            {item.icon}
+          </span>
+        )}
+        {item.label}
+      </Link>
+    )
+  }
 
   return (
     <aside
@@ -65,11 +154,9 @@ export function Sidebar({ papel, nome }: SidebarProps) {
         flexDirection: 'column',
         minHeight: '100vh',
         padding: '24px 0',
-        position: 'relative',
         boxShadow: 'inset -1px 0 0 rgba(255,255,255,0.04)',
       }}
     >
-      {/* Brand */}
       <div style={{ padding: '0 24px 20px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
         <div
           style={{
@@ -105,69 +192,63 @@ export function Sidebar({ papel, nome }: SidebarProps) {
         </div>
       </div>
 
-      {/* Nav */}
       <nav style={{ flex: 1, padding: '20px 12px', display: 'flex', flexDirection: 'column', gap: 2 }}>
-        {itensVisiveis.map((item) => {
-          const ativo = pathname.startsWith(item.href)
-          const isHover = hover === item.href
+        {entradasVisiveis.map((e, idx) => {
+          if (!isGrupo(e)) return renderItem(e as ItemMenu)
 
+          // Grupo expansível
+          const grupo = e as GrupoMenu
+          const grupoHover = hover === `grupo-${grupo.label}`
           return (
-            <Link
-              key={item.href}
-              href={item.href}
-              onMouseEnter={() => setHover(item.href)}
-              onMouseLeave={() => setHover(null)}
-              style={{
-                position: 'relative',
-                padding: '10px 14px',
-                borderRadius: 8,
-                fontSize: 13.5,
-                fontWeight: ativo ? 600 : 500,
-                color: ativo ? '#FFFFFF' : isHover ? '#FFFFFF' : 'rgba(255,255,255,0.72)',
-                background: ativo
-                  ? 'linear-gradient(90deg, rgba(46,111,229,0.18) 0%, rgba(46,111,229,0.04) 100%)'
-                  : isHover
-                  ? 'rgba(255,255,255,0.05)'
-                  : 'transparent',
-                textDecoration: 'none',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                transition: 'background 0.15s, color 0.15s',
-              }}
-            >
-              {ativo && (
-                <span
-                  style={{
-                    position: 'absolute',
-                    left: 0,
-                    top: 8,
-                    bottom: 8,
-                    width: 3,
-                    borderRadius: '0 2px 2px 0',
-                    background: 'linear-gradient(180deg, #4F7CFF 0%, #2E6FE5 100%)',
-                  }}
-                />
-              )}
-              <span
+            <div key={`grupo-${idx}`} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <button
+                type="button"
+                onClick={() => setCadastrosAberto((a) => !a)}
+                onMouseEnter={() => setHover(`grupo-${grupo.label}`)}
+                onMouseLeave={() => setHover(null)}
                 style={{
-                  width: 18,
-                  display: 'inline-flex',
-                  justifyContent: 'center',
-                  fontSize: 14,
-                  color: ativo ? '#4F7CFF' : 'rgba(255,255,255,0.5)',
-                  transition: 'color 0.15s',
+                  padding: '10px 14px',
+                  borderRadius: 8,
+                  fontSize: 13.5,
+                  fontWeight: 500,
+                  color: grupoHover ? '#FFFFFF' : 'rgba(255,255,255,0.72)',
+                  background: grupoHover ? 'rgba(255,255,255,0.05)' : 'transparent',
+                  border: 'none',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  width: '100%',
+                  transition: 'background 0.15s, color 0.15s',
                 }}
               >
-                {item.icon}
-              </span>
-              {item.label}
-            </Link>
+                <span
+                  style={{
+                    width: 18,
+                    display: 'inline-flex',
+                    justifyContent: 'center',
+                    fontSize: 14,
+                    color: 'rgba(255,255,255,0.5)',
+                  }}
+                >
+                  {grupo.icon}
+                </span>
+                <span style={{ flex: 1 }}>{grupo.label}</span>
+                <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>
+                  {cadastrosAberto ? '▾' : '▸'}
+                </span>
+              </button>
+              {cadastrosAberto && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  {grupo.items.map((it) => renderItem(it, true))}
+                </div>
+              )}
+            </div>
           )
         })}
       </nav>
 
-      {/* User footer */}
       <div
         style={{
           padding: '16px 16px',

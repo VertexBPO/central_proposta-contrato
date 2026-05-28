@@ -8,6 +8,7 @@ import { Card } from '@/components/Card'
 import { Badge } from '@/components/Badge'
 import { Button } from '@/components/Button'
 import { PageHeader } from '@/components/PageHeader'
+import { EditarClienteBtn } from './editar-cliente'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,14 +16,21 @@ export default async function ClientePage({ params }: { params: Promise<{ id: st
   const { id } = await params
   const supabase = await createClient()
 
-  const [{ data: cli }, { data: props }] = await Promise.all([
+  const [{ data: cli }, { data: props }, { data: { user } }] = await Promise.all([
     supabase.from('clients').select('*').eq('id', id).maybeSingle(),
     supabase.from('proposals').select('*').eq('client_id', id).order('data_proposta', { ascending: false }),
+    supabase.auth.getUser(),
   ])
 
   if (!cli) notFound()
   const cliente = cli as Client
   const propostas = (props ?? []) as Proposal[]
+
+  let isAdmin = false
+  if (user) {
+    const { data: me } = await supabase.from('users').select('papel').eq('id', user.id).maybeSingle()
+    isAdmin = me?.papel === 'admin'
+  }
 
   const fechadas = propostas.filter((p) => ['fechada', 'contrato_gerado'].includes(p.status)).length
   const perdidas = propostas.filter((p) => p.status === 'perdida').length
@@ -39,9 +47,12 @@ export default async function ClientePage({ params }: { params: Promise<{ id: st
         title={cliente.razao_social}
         subtitle={`CNPJ ${formatCnpj(cliente.cnpj)}`}
         actions={
-          <Link href={`/propostas/nova?cliente=${cliente.id}`}>
-            <Button>+ Nova proposta para essa empresa</Button>
-          </Link>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <EditarClienteBtn cliente={cliente} isAdmin={isAdmin} />
+            <Link href={`/propostas/nova?cliente=${cliente.id}`}>
+              <Button>+ Nova proposta</Button>
+            </Link>
+          </div>
         }
       />
 
@@ -66,12 +77,8 @@ export default async function ClientePage({ params }: { params: Promise<{ id: st
 
       <section style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 24 }}>
         <Card>
-          <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>Dados</h3>
+          <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>Empresa</h3>
           <dl style={{ display: 'flex', flexDirection: 'column', gap: 12, fontSize: 13 }}>
-            <div>
-              <dt style={{ color: '#8A9AB5', fontSize: 11, textTransform: 'uppercase', marginBottom: 2 }}>Responsável</dt>
-              <dd>{cliente.responsavel_nome || '—'}</dd>
-            </div>
             <div>
               <dt style={{ color: '#8A9AB5', fontSize: 11, textTransform: 'uppercase', marginBottom: 2 }}>E-mail</dt>
               <dd>{cliente.email}</dd>
@@ -91,6 +98,41 @@ export default async function ClientePage({ params }: { params: Promise<{ id: st
                     <br />
                     {cliente.endereco_bairro}
                     {cliente.endereco_cidade && ` — ${cliente.endereco_cidade}/${cliente.endereco_uf}`}
+                  </>
+                )}
+              </dd>
+            </div>
+          </dl>
+
+          <h3 style={{ fontSize: 16, fontWeight: 600, marginTop: 24, marginBottom: 16 }}>Responsável</h3>
+          <dl style={{ display: 'flex', flexDirection: 'column', gap: 12, fontSize: 13 }}>
+            <div>
+              <dt style={{ color: '#8A9AB5', fontSize: 11, textTransform: 'uppercase', marginBottom: 2 }}>Nome</dt>
+              <dd>{cliente.responsavel_nome || '—'}</dd>
+            </div>
+            <div>
+              <dt style={{ color: '#8A9AB5', fontSize: 11, textTransform: 'uppercase', marginBottom: 2 }}>Cargo</dt>
+              <dd>{cliente.responsavel_cargo || '—'}</dd>
+            </div>
+            <div>
+              <dt style={{ color: '#8A9AB5', fontSize: 11, textTransform: 'uppercase', marginBottom: 2 }}>CPF</dt>
+              <dd>{cliente.responsavel_cpf || '—'}</dd>
+            </div>
+            <div>
+              <dt style={{ color: '#8A9AB5', fontSize: 11, textTransform: 'uppercase', marginBottom: 2 }}>E-mail corporativo</dt>
+              <dd>{cliente.responsavel_email || '—'}</dd>
+            </div>
+            <div>
+              <dt style={{ color: '#8A9AB5', fontSize: 11, textTransform: 'uppercase', marginBottom: 2 }}>Endereço residencial</dt>
+              <dd>
+                {[cliente.responsavel_endereco_logradouro, cliente.responsavel_endereco_numero, cliente.responsavel_endereco_complemento]
+                  .filter(Boolean)
+                  .join(', ') || '—'}
+                {cliente.responsavel_endereco_bairro && (
+                  <>
+                    <br />
+                    {cliente.responsavel_endereco_bairro}
+                    {cliente.responsavel_endereco_cidade && ` — ${cliente.responsavel_endereco_cidade}/${cliente.responsavel_endereco_uf}`}
                   </>
                 )}
               </dd>
