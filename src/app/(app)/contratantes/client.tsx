@@ -38,6 +38,7 @@ export function ContratantesClient({ contratantes }: Props) {
   const [ativo, setAtivo] = useState(true)
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
+  const [apagando, setApagando] = useState<string | null>(null)
 
   function abrirNovo() {
     setEditing(null)
@@ -98,6 +99,22 @@ export function ContratantesClient({ contratantes }: Props) {
     startTransition(() => router.refresh())
   }
 
+  async function apagar(c: Contractor) {
+    if (!window.confirm(`Apagar a contratada "${c.razao_social}"?\n\nSe houver propostas vinculadas, o banco vai bloquear (use "Desativar" no checkbox em vez disso).`)) return
+    setApagando(c.id)
+    const { error } = await supabase.from('contractors').delete().eq('id', c.id)
+    setApagando(null)
+    if (error) {
+      if (error.code === '23503') {
+        window.alert(`"${c.razao_social}" está vinculada a uma proposta. Desative em vez de apagar.`)
+      } else {
+        window.alert(error.message)
+      }
+      return
+    }
+    startTransition(() => router.refresh())
+  }
+
   return (
     <div style={{ maxWidth: 960, margin: '0 auto' }}>
       <PageHeader
@@ -126,9 +143,19 @@ export function ContratantesClient({ contratantes }: Props) {
                   </div>
                   <div style={{ fontSize: 13, color: '#0D1B3E' }}>{c.endereco}</div>
                 </div>
-                <Button variant="secondary" onClick={() => abrirEdicao(c)}>
-                  Editar
-                </Button>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <Button variant="secondary" onClick={() => abrirEdicao(c)}>
+                    Editar
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => apagar(c)}
+                    loading={apagando === c.id}
+                    style={{ color: '#D64545' }}
+                  >
+                    Apagar
+                  </Button>
+                </div>
               </div>
             </Card>
           ))}
