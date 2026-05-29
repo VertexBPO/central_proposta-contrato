@@ -3,17 +3,30 @@
 export type Papel = 'admin' | 'operador'
 
 export type StatusProposta =
+  // Etapa 1 — Vertex monta
   | 'rascunho'
   | 'aguardando_aprovacao'
   | 'aprovada'
-  | 'enviada'
-  | 'aberta'
-  | 'em_negociacao'
-  | 'fechada'
-  | 'aguardando_re_aceite'
-  | 'contrato_gerado'
   | 'devolvida'
   | 'rejeitada'
+  // Etapa 2 — Cliente recebe e decide
+  | 'enviada'
+  | 'aberta'
+  | 'em_negociacao' // legado
+  | 'aprovada_cliente'
+  // Etapa 3 — Assinatura da proposta (ZapSign)
+  | 'proposta_assinatura_pendente'
+  | 'proposta_assinada'
+  // Etapa 4 — Cliente preenche cadastro pra gerar contrato
+  | 'aguardando_cadastro'
+  // Etapa 5 — Contrato + assinatura
+  | 'contrato_gerado'
+  | 'contrato_assinatura_pendente'
+  | 'contrato_assinado'
+  // Legados
+  | 'fechada'
+  | 'aguardando_re_aceite'
+  // Terminais
   | 'perdida'
   | 'cancelada'
 

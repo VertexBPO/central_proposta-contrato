@@ -77,7 +77,7 @@ export function NovaPropostaForm({ templates, contratantes, customPlaceholders, 
   const [customValues, setCustomValues] = useState<Record<string, string>>({})
 
   // Magic link
-  const [enviarMagicLink, setEnviarMagicLink] = useState(false)
+  // Magic link removido — cliente não preenche mais dados no início do fluxo
 
   // State
   const [salvando, setSalvando] = useState(false)
@@ -180,7 +180,7 @@ export function NovaPropostaForm({ templates, contratantes, customPlaceholders, 
       valor_parcela: valorParcela,
       data_inicio_contrato: dataInicio,
       custom_values: customValues,
-      enviar_magic_link: enviarMagicLink,
+      enviar_magic_link: false,
     })
     setSalvando(false)
 
@@ -325,14 +325,6 @@ export function NovaPropostaForm({ templates, contratantes, customPlaceholders, 
                 </Select>
               </div>
 
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, marginTop: 8 }}>
-                <input
-                  type="checkbox"
-                  checked={enviarMagicLink}
-                  onChange={(e) => setEnviarMagicLink(e.target.checked)}
-                />
-                Gerar link para o contratante completar os próprios dados (24h)
-              </label>
             </div>
           )}
         </Card>

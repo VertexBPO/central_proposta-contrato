@@ -89,11 +89,12 @@ export function montarValores(
   const docContratada = formatDocumento(contratante.documento, contratante.tipo)
   const enderecoContratada = contratante.endereco
 
-  // === CONJUNTO 1 — Propostas Assessoria (lowercase, 12) ===
+  // === CONJUNTO 1 — Propostas Assessoria (lowercase, 13) ===
   const assessoria = {
     ano_atual: String(anoAtual),
     ano_subsequente: String(anoAtual + 1),
     data_atual_extenso: dataExtenso(proposal.data_proposta),
+    email_contratante: cliente.email,
     nome_cliente: cliente.responsavel_nome ?? '',
     nome_empresa: cliente.razao_social,
     num_proposta: proposal.numero,
@@ -173,6 +174,7 @@ export const PLACEHOLDERS_DISPONIVEIS = {
     { nome: 'ano_atual', descricao: 'Ano da proposta (ex.: 2026)' },
     { nome: 'ano_subsequente', descricao: 'Ano seguinte (ex.: 2027)' },
     { nome: 'data_atual_extenso', descricao: 'Data da proposta por extenso (22 de maio de 2026)' },
+    { nome: 'email_contratante', descricao: 'E-mail do contratante (empresa)' },
     { nome: 'nome_cliente', descricao: 'Nome do responsável do contratante' },
     { nome: 'nome_empresa', descricao: 'Razão social do contratante' },
     { nome: 'num_proposta', descricao: 'Número da proposta (0526-XX.XX)' },

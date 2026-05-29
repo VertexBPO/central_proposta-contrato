@@ -21,10 +21,10 @@ const CARDS: { status: StatusProposta; label: string; cor: string }[] = [
   { status: 'rascunho', label: 'Rascunhos', cor: '#8A9AB5' },
   { status: 'aguardando_aprovacao', label: 'Aguardando aprovação', cor: '#E8A93C' },
   { status: 'enviada', label: 'Enviadas', cor: '#2E6FE5' },
-  { status: 'aberta', label: 'Abertas', cor: '#2E6FE5' },
-  { status: 'em_negociacao', label: 'Em negociação', cor: '#E8A93C' },
-  { status: 'fechada', label: 'Fechadas', cor: '#1B9E5C' },
-  { status: 'contrato_gerado', label: 'Contratos', cor: '#1B9E5C' },
+  { status: 'aprovada_cliente', label: 'Aprovadas pelo cliente', cor: '#2E6FE5' },
+  { status: 'proposta_assinada', label: 'Propostas assinadas', cor: '#1B9E5C' },
+  { status: 'contrato_gerado', label: 'Contratos gerados', cor: '#1B9E5C' },
+  { status: 'contrato_assinado', label: 'Contratos assinados', cor: '#1B9E5C' },
   { status: 'perdida', label: 'Perdidas', cor: '#D64545' },
 ]
 
