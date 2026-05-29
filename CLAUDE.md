@@ -13,6 +13,11 @@ Regras específicas deste projeto. Sobrescreve o CLAUDE.md global onde houver co
 - Resend (e-mail transacional)
 - ZapSign (assinatura digital)
 
+## Atualização de memória (obrigatório)
+
+- **A cada 10 minutos corridos de trabalho**, atualizar TODAS as memórias do projeto em andamento (MEMORY.md + arquivos `project_*.md` / `reference_*.md`) com o estado atual, sem precisar ser pedido.
+- Também atualizar ao sinalizar pausa/intervalo ou ao encerrar a sessão.
+
 ## Workflow obrigatório
 
 1. **Nunca pushar direto na `main`** — `main` é produção

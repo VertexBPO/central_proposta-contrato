@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Client, Proposal, ProposalTemplate, ContractTemplate, formatCurrency, formatDate } from '@/lib/db/types'
 import { formatCnpj } from '@/lib/db/cnpj'
 import { STATUS_LABEL, STATUS_VARIANT } from '@/lib/db/status'
+import { clicksignHost } from '@/lib/clicksign/client'
 import { Card } from '@/components/Card'
 import { Badge } from '@/components/Badge'
 import { PageHeader } from '@/components/PageHeader'
@@ -63,6 +64,13 @@ export default async function PropostaDetailPage({ params }: { params: Promise<{
   const auditLogs = (logs ?? []) as AuditLog[]
   const valorTotal = Number(proposta.valor_adesao) + Number(proposta.valor_parcela) * proposta.num_parcelas
 
+  const { data: contratoRow } = await supabase
+    .from('contracts')
+    .select('assinatura_vertex_key, vertex_assinou_em')
+    .eq('proposal_id', proposta.id)
+    .maybeSingle()
+  const contrato = contratoRow as { assinatura_vertex_key: string | null; vertex_assinou_em: string | null } | null
+
   return (
     <div style={{ maxWidth: 1280, margin: '0 auto' }}>
       <PageHeader
@@ -71,7 +79,16 @@ export default async function PropostaDetailPage({ params }: { params: Promise<{
         actions={<Badge variant={STATUS_VARIANT[proposta.status]}>{STATUS_LABEL[proposta.status]}</Badge>}
       />
 
-      <PropostaAcoes id={proposta.id} status={proposta.status} papel={papel} />
+      <PropostaAcoes
+        id={proposta.id}
+        status={proposta.status}
+        papel={papel}
+        host={clicksignHost()}
+        propostaVertexKey={proposta.assinatura_vertex_key}
+        propostaVertexAssinou={!!proposta.vertex_assinou_em}
+        contratoVertexKey={contrato?.assinatura_vertex_key ?? null}
+        contratoVertexAssinou={!!contrato?.vertex_assinou_em}
+      />
 
       <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
         <a

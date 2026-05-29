@@ -4,12 +4,14 @@ import { randomUUID } from 'node:crypto'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { FormaAceite, StatusProposta, Client, Contractor, Parameters, Proposal, ContractTemplate, EmailTemplate } from '@/lib/db/types'
+import { FormaAceite, StatusProposta, Client, Contractor, Parameters, Proposal, EmailTemplate } from '@/lib/db/types'
 import { preencherDocx } from '@/lib/docs/gerar-com-template'
 import { docxParaPdf } from '@/lib/cloudconvert/client'
 import { montarValores } from '@/lib/docs/valores-placeholders'
 import { enviarEmail } from '@/lib/email/resend'
-import { enviarParaAssinatura } from '@/lib/zapsign/client'
+import { criarDocumentoAssinatura, vertexSignatario } from '@/lib/clicksign/client'
+import { gerarPdfProposta } from '@/lib/docs/gerar-pdf-proposta'
+import { gerarEEnviarContrato } from '@/lib/contrato/gerar'
 
 function substituirPlaceholdersTexto(template: string, valores: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => valores[key] ?? `{{${key}}}`)
@@ -20,6 +22,7 @@ interface Resultado {
   erro?: string
   magic_link?: string
   contrato_url?: string
+  assinatura_key?: string
 }
 
 async function getUserOrErr() {
@@ -244,69 +247,151 @@ export async function enviarProposta(id: string): Promise<Resultado> {
   return { ok: true }
 }
 
-export async function enviarContratoParaAssinatura(id: string): Promise<Resultado> {
+// ETAPA 2 — gera o PDF da proposta e cria o documento ClickSign (Vertex 1º, cliente 2º).
+// Status -> proposta_assinatura_pendente. Retorna a key da Vertex pro admin assinar embedded.
+export async function enviarPropostaParaAssinatura(id: string): Promise<Resultado> {
   const user = await getUserOrErr()
   if (!user) return { ok: false, erro: 'Sessão inválida.' }
 
   const dados = await carregarPropostaCompleta(id)
   if (!dados) return { ok: false, erro: 'Proposta não encontrada.' }
-  const { proposta, cliente, contratante, contractTemplateId } = dados
+  const { proposta, cliente } = dados
 
-  if (proposta.status !== 'fechada') {
-    return { ok: false, erro: 'A proposta precisa estar fechada para gerar o contrato.' }
+  if (proposta.status !== 'aprovada') {
+    return { ok: false, erro: 'A proposta precisa estar aprovada internamente para ir à assinatura.' }
   }
+
+  const pdfRes = await gerarPdfProposta(id)
+  if (!pdfRes.ok || !pdfRes.pdf) return { ok: false, erro: pdfRes.erro ?? 'Falha ao gerar o PDF da proposta.' }
+
+  const vertex = vertexSignatario()
+  const doc = await criarDocumentoAssinatura({
+    nome: `Proposta ${proposta.numero}`,
+    pdfBase64: Buffer.from(pdfRes.pdf).toString('base64'),
+    signatarios: [
+      vertex,
+      {
+        nome: cliente.responsavel_nome ?? cliente.razao_social,
+        email: cliente.email,
+        cpf: cliente.responsavel_cpf ?? undefined,
+      },
+    ],
+    mensagem: `Assinatura da proposta ${proposta.numero} — Vertex BPO.`,
+  })
+  if (!doc.ok || !doc.keys) return { ok: false, erro: doc.erro ?? 'Falha ao enviar proposta para assinatura.' }
+
+  const vertexKey = doc.keys[vertex.email.toLowerCase()] ?? null
+  const clienteKey = doc.keys[cliente.email.toLowerCase()] ?? null
 
   const admin = createAdminClient()
-  const { data: ctplRow } = await admin
-    .from('contract_templates')
-    .select('*')
-    .eq('id', contractTemplateId)
-    .maybeSingle()
-  if (!ctplRow) return { ok: false, erro: 'Template de contrato não configurado.' }
-  const ctpl = ctplRow as ContractTemplate
-  if (!ctpl.template_file_path) return { ok: false, erro: 'Template de contrato sem arquivo .docx.' }
+  const token = randomUUID()
+  const expira = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+  const { error } = await admin
+    .from('proposals')
+    .update({
+      status: 'proposta_assinatura_pendente',
+      clicksign_doc_id: doc.doc_id ?? null,
+      assinatura_vertex_key: vertexKey,
+      assinatura_cliente_key: clienteKey,
+      enviado_assinatura_em: new Date().toISOString(),
+      magic_link_token: token,
+      magic_link_expira_em: expira,
+    })
+    .eq('id', id)
+  if (error) return { ok: false, erro: error.message }
 
-  // Gera PDF via docxtemplater + CloudConvert
-  const valores = montarValores(proposta, cliente, contratante)
-  let pdf: Buffer
-  try {
-    const docx = await preencherDocx(ctpl.template_file_path, valores)
-    pdf = await docxParaPdf(docx, `contrato-${proposta.numero}.docx`)
-  } catch (e) {
-    return { ok: false, erro: `Falha ao gerar PDF do contrato: ${e instanceof Error ? e.message : 'erro'}` }
+  await logAudit(user.id, 'enviar_proposta_assinatura', id, { status: proposta.status }, {
+    status: 'proposta_assinatura_pendente',
+    clicksign_doc_id: doc.doc_id,
+  })
+  revalidatePath(`/propostas/${id}`)
+  return { ok: true, assinatura_key: vertexKey ?? undefined }
+}
+
+// ETAPA 2->3 — após a Vertex assinar a proposta (embedded), notifica o cliente por e-mail.
+export async function confirmarAssinaturaVertexProposta(id: string): Promise<Resultado> {
+  const user = await getUserOrErr()
+  if (!user) return { ok: false, erro: 'Sessão inválida.' }
+
+  const dados = await carregarPropostaCompleta(id)
+  if (!dados) return { ok: false, erro: 'Proposta não encontrada.' }
+  const { proposta, cliente, parametros } = dados
+
+  const admin = createAdminClient()
+  await admin.from('proposals').update({ vertex_assinou_em: new Date().toISOString() }).eq('id', id)
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+  const link = `${appUrl}/c/assinar-proposta/${proposta.magic_link_token}`
+  const envio = await enviarEmail({
+    para: cliente.email,
+    bcc: parametros.email_vertex,
+    assunto: `Assine a proposta ${proposta.numero} — Vertex BPO`,
+    corpoHtml: `<p>Olá, ${cliente.responsavel_nome ?? cliente.razao_social}!</p>
+<p>A Vertex assinou a proposta <strong>${proposta.numero}</strong>. Agora é a sua vez.</p>
+<p>Visualize e assine pelo link: <a href="${link}">${link}</a></p>`,
+  })
+
+  await admin.from('email_logs').insert({
+    proposal_id: id,
+    tipo: 'envio_proposta',
+    destinatario: cliente.email,
+    assunto: `Assine a proposta ${proposta.numero} — Vertex BPO`,
+    status: envio.ok ? 'enviado' : 'falha',
+    resend_id: envio.id ?? null,
+    bounce_motivo: envio.erro ?? null,
+  })
+
+  await logAudit(user.id, 'vertex_assinou_proposta', id, null, { vertex_assinou: true })
+  revalidatePath(`/propostas/${id}`)
+  if (!envio.ok) return { ok: false, erro: envio.erro ?? 'Proposta assinada, mas falhou o envio ao cliente.' }
+  return { ok: true }
+}
+
+// ETAPA 5 (fallback manual do admin) — gera o contrato e envia para assinatura.
+export async function enviarContratoParaAssinatura(id: string): Promise<Resultado> {
+  const user = await getUserOrErr()
+  if (!user) return { ok: false, erro: 'Sessão inválida.' }
+
+  const admin = createAdminClient()
+  const { data: prop } = await admin.from('proposals').select('status').eq('id', id).maybeSingle()
+  if (!prop) return { ok: false, erro: 'Proposta não encontrada.' }
+  if (!['aguardando_cadastro', 'proposta_assinada'].includes(prop.status)) {
+    return { ok: false, erro: `Contrato só pode ser gerado após o cadastro do cliente. Status atual: ${prop.status}.` }
   }
 
-  // 2) Salva no Storage
-  const path = `contratos/${proposta.id}/${proposta.numero}.pdf`
-  await admin.storage.from('documentos').upload(path, pdf, { contentType: 'application/pdf', upsert: true })
+  const r = await gerarEEnviarContrato(id)
+  if (!r.ok) return { ok: false, erro: r.erro }
+  revalidatePath(`/propostas/${id}`)
+  return { ok: true, assinatura_key: r.vertexKey }
+}
 
-  // 3) Envia para ZapSign (stub se sem token)
-  const pdfBase64 = Buffer.from(pdf).toString('base64')
-  const zap = await enviarParaAssinatura({
-    nome: `Contrato ${proposta.numero}`,
-    pdfBase64,
-    signatarioNome: cliente.responsavel_nome ?? cliente.razao_social,
-    signatarioEmail: cliente.email,
+// ETAPA 5->6 — após a Vertex assinar o contrato (embedded), notifica o cliente por e-mail.
+export async function confirmarAssinaturaVertexContrato(id: string): Promise<Resultado> {
+  const user = await getUserOrErr()
+  if (!user) return { ok: false, erro: 'Sessão inválida.' }
+
+  const dados = await carregarPropostaCompleta(id)
+  if (!dados) return { ok: false, erro: 'Proposta não encontrada.' }
+  const { proposta, cliente, parametros } = dados
+
+  const admin = createAdminClient()
+  await admin.from('contracts').update({ vertex_assinou_em: new Date().toISOString() }).eq('proposal_id', id)
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+  const link = `${appUrl}/c/assinar-contrato/${proposta.magic_link_token}`
+  const envio = await enviarEmail({
+    para: cliente.responsavel_email ?? cliente.email,
+    bcc: parametros.email_vertex,
+    assunto: `Assine o contrato ${proposta.numero} — Vertex BPO`,
+    corpoHtml: `<p>Olá, ${cliente.responsavel_nome ?? cliente.razao_social}!</p>
+<p>A Vertex assinou o contrato <strong>${proposta.numero}</strong>. Falta a sua assinatura.</p>
+<p>Assine pelo link: <a href="${link}">${link}</a></p>`,
   })
 
-  if (!zap.ok) return { ok: false, erro: zap.erro ?? 'Falha ao enviar para assinatura.' }
-
-  // 4) Cria registro contracts
-  const { error: contractErr } = await admin.from('contracts').insert({
-    proposal_id: proposta.id,
-    numero: proposta.numero,
-    pdf_storage_path: path,
-    zapsign_doc_id: zap.doc_id ?? null,
-    zapsign_url: zap.url_signatario ?? null,
-    enviado_zapsign_em: new Date().toISOString(),
-    assinatura_url: zap.url_signatario ?? null,
-  })
-  if (contractErr) return { ok: false, erro: `Erro ao salvar contrato: ${contractErr.message}` }
-
-  // 5) Atualiza proposta
-  await mudarStatus(id, 'contrato_gerado', {}, 'gerar_contrato')
-
-  return { ok: true, contrato_url: zap.url_signatario }
+  await logAudit(user.id, 'vertex_assinou_contrato', id, null, { vertex_assinou: true })
+  revalidatePath(`/propostas/${id}`)
+  if (!envio.ok) return { ok: false, erro: envio.erro ?? 'Contrato assinado pela Vertex, mas falhou o envio ao cliente.' }
+  return { ok: true }
 }
 
 export async function gerarMagicLink(id: string): Promise<Resultado> {

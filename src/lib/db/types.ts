@@ -14,7 +14,7 @@ export type StatusProposta =
   | 'aberta'
   | 'em_negociacao' // legado
   | 'aprovada_cliente'
-  // Etapa 3 — Assinatura da proposta (ZapSign)
+  // Etapa 3 — Assinatura da proposta (ClickSign)
   | 'proposta_assinatura_pendente'
   | 'proposta_assinada'
   // Etapa 4 — Cliente preenche cadastro pra gerar contrato
@@ -174,6 +174,14 @@ export interface Proposal {
   pdf_storage_path: string | null
   docx_storage_path: string | null
   custom_values: Record<string, string>
+  // Assinatura da proposta (ClickSign)
+  clicksign_doc_id: string | null
+  assinatura_vertex_key: string | null
+  assinatura_cliente_key: string | null
+  enviado_assinatura_em: string | null
+  vertex_assinou_em: string | null
+  cliente_assinou_em: string | null
+  pdf_assinado_path: string | null
   criado_em: string
   atualizado_em: string
 }
@@ -184,12 +192,16 @@ export interface Contract {
   numero: string
   pdf_storage_path: string | null
   docx_storage_path: string | null
-  zapsign_doc_id: string | null
-  zapsign_url: string | null
+  clicksign_doc_id: string | null
+  clicksign_url: string | null
+  assinatura_vertex_key: string | null
+  assinatura_cliente_key: string | null
   gerado_em: string
-  enviado_zapsign_em: string | null
+  enviado_assinatura_em: string | null
+  vertex_assinou_em: string | null
   assinado_em: string | null
   assinatura_url: string | null
+  pdf_assinado_path: string | null
   atualizado_em: string
 }
 
