@@ -80,7 +80,7 @@ export default async function ClientesPage({ searchParams }: { searchParams: Pro
                     {c.responsavel_nome && <span>{c.responsavel_nome}</span>}
                   </div>
                 </Link>
-                <ClienteRowActions id={c.id} nome={c.razao_social} isAdmin={isAdmin} />
+                <ClienteRowActions cliente={c} isAdmin={isAdmin} />
               </div>
             </Card>
           ))}

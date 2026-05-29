@@ -5,6 +5,7 @@ import { Card } from '@/components/Card'
 import { Input } from '@/components/Input'
 import { Button } from '@/components/Button'
 import { formatCnpj, onlyDigits, validateCnpj } from '@/lib/db/cnpj'
+import { formatTelefone, formatCep } from '@/lib/db/mascaras'
 import { salvarDadosCliente } from './actions'
 import type { PropostaCliente } from '@/lib/cliente/sessao'
 
@@ -130,8 +131,9 @@ export function PreencherForm({ cliente, numero }: Props) {
               name="telefone"
               label="Telefone"
               value={telefone}
-              onChange={(e) => setTelefone(e.target.value)}
+              onChange={(e) => setTelefone(formatTelefone(e.target.value))}
               placeholder="(00) 00000-0000"
+              inputMode="tel"
             />
 
             <div style={{ marginTop: 8, marginBottom: 4 }}>
@@ -172,8 +174,9 @@ export function PreencherForm({ cliente, numero }: Props) {
                 name="endereco_cep"
                 label="CEP"
                 value={cep}
-                onChange={(e) => setCep(e.target.value)}
+                onChange={(e) => setCep(formatCep(e.target.value))}
                 placeholder="00000-000"
+                inputMode="numeric"
               />
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
