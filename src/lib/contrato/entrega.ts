@@ -49,8 +49,11 @@ export async function entregarDocumentosAssinados(propostaId: string): Promise<E
   }
 
   const para = cliente.responsavel_email ?? cliente.email
+  const { data: par } = await admin.from('parameters').select('email_vertex').eq('id', 1).maybeSingle()
+  const emailVertex = (par as { email_vertex: string } | null)?.email_vertex
   const envio = await enviarEmail({
     para,
+    bcc: emailVertex, // Vertex recebe cópia do fechamento
     assunto: `Documentos assinados — ${proposta.numero} — Vertex BPO`,
     corpoHtml: `<p>Olá, ${cliente.responsavel_nome ?? cliente.razao_social}!</p>
 <p>Está tudo assinado. Seguem em anexo a <strong>proposta</strong> e o <strong>contrato ${proposta.numero}</strong> assinados.</p>

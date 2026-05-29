@@ -2,6 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createHmac, timingSafeEqual } from 'crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { entregarDocumentosAssinados } from '@/lib/contrato/entrega'
+import { enviarEmail } from '@/lib/email/resend'
+
+// Avisa a Vertex por e-mail (best-effort).
+async function avisarVertex(assunto: string, html: string) {
+  const admin = createAdminClient()
+  const { data } = await admin.from('parameters').select('email_vertex').eq('id', 1).maybeSingle()
+  const email = (data as { email_vertex: string } | null)?.email_vertex
+  if (email) await enviarEmail({ para: email, assunto, corpoHtml: html })
+}
 
 export const runtime = 'nodejs'
 
@@ -12,7 +21,7 @@ export const runtime = 'nodejs'
 // Eventos relevantes: "auto_close" / "close" / "document_closed" => documento
 // totalmente assinado. Marcamos o contrato como assinado e avançamos o status.
 
-const EVENTOS_FECHAMENTO = new Set(['auto_close', 'close', 'document_closed', 'deadline_close'])
+const EVENTOS_FECHAMENTO = new Set(['auto_close', 'close', 'document_closed'])
 
 function assinaturaValida(rawBody: string, header: string | null, secret: string): boolean {
   if (!header) return false
@@ -68,11 +77,11 @@ export async function POST(req: NextRequest) {
   // 1) É o documento da PROPOSTA?
   const { data: prop } = await admin
     .from('proposals')
-    .select('id, status')
+    .select('id, numero, status')
     .eq('clicksign_doc_id', documentKey)
     .maybeSingle()
   if (prop) {
-    const p = prop as { id: string; status: string }
+    const p = prop as { id: string; numero: string; status: string }
     if (p.status === 'proposta_assinatura_pendente') {
       await admin
         .from('proposals')
@@ -85,6 +94,10 @@ export async function POST(req: NextRequest) {
         entidade_id: p.id,
         depois: { evento, document_key: documentKey, status: 'proposta_assinada' },
       })
+      await avisarVertex(
+        `Proposta ${p.numero} assinada pelo cliente`,
+        `<p>O cliente assinou a proposta <strong>${p.numero}</strong>. O cliente já pode preencher o cadastro do contrato.</p>`,
+      )
       return NextResponse.json({ ok: true, tipo: 'proposta', evento, handled: true })
     }
     return NextResponse.json({ ok: true, tipo: 'proposta', evento, handled: false, motivo: `status ${p.status}` })
