@@ -1,10 +1,27 @@
 # TASKS — Central de Propostas e Contratos
 
-## Bloqueado (aguardando reset CloudConvert às 21h Brasília)
-- Validar PDF da proposta com todas as correções aplicadas (escopo justificado + bullets + watermark 10%)
+## Bloqueado
+- **ClickSign — configurar "Usuário da API"** em Configurações → API (sem isso a API retorna "E-mail do usuário da API não configurado" e nenhuma criação de documento/signatário funciona)
+- Testar fluxo real de assinatura (depende do item acima)
 
 ## Em andamento
-- Refinamento do fluxo de geração de PDF
+- Ativação da integração ClickSign (env na Vercel ✅, webhook ✅, migration ✅; falta usuário da API + Resend)
+
+## Concluído — Fluxo ClickSign (assinatura completa)
+- [x] Migration `20260529000002`: colunas de assinatura em proposals + rename zapsign_*→clicksign_* em contracts (aplicada no Supabase)
+- [x] Lib ClickSign v1: 2 signatários tokenless, sequence, download PDF assinado, signatário Vertex fixo
+- [x] Assinatura da proposta: Vertex (embedded) → cliente (`/c/assinar-proposta`) → cadastro
+- [x] Geração automática do contrato após cadastro + notifica Vertex
+- [x] Assinatura do contrato: Vertex (embedded) → cliente (`/c/assinar-contrato`) → e-mail final com 2 PDFs
+- [x] Webhook ClickSign (proposta + contrato) habilitado; avisa Vertex; HMAC
+- [x] Componente ClicksignEmbed (widget tokenless + fallback iframe)
+- [x] Env ClickSign + APP_URL na Vercel; remove stub ZapSign
+
+### Pendências ClickSign
+- [ ] Configurar Usuário da API (bloqueador)
+- [ ] `RESEND_API_KEY` (e-mails em stub até preencher)
+- [ ] Contratar embedded/tokenless ("Clicksign no seu site") — opcional, há fallback
+- [ ] Assinatura Vertex com e-CNPJ: usar fallback "abrir em nova aba" (widget embedded não faz ICP-Brasil); CPF do signatário fica vazio
 
 ## Concluído (branch `feat/initial-setup`)
 
