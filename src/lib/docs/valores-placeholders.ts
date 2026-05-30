@@ -30,7 +30,8 @@ function calcDataFim(iso: string, meses: number): string {
 
 function valorExtenso(n: number): string {
   try {
-    return extenso(n.toFixed(2), { mode: 'currency', currency: { type: 'BRL' } })
+    // A lib `extenso` exige vírgula como separador decimal no modo moeda (ex.: "2700,00").
+    return extenso(n.toFixed(2).replace('.', ','), { mode: 'currency', currency: { type: 'BRL' } })
   } catch {
     return ''
   }
